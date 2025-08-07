@@ -1,3 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Glowing Draggable Blocks with Sound</title>
+  <style>
+    body {
+      margin: 0;
+      background: #111;
+      overflow: hidden;
+      touch-action: none; /* prevent default touch gestures */
+    }
+    canvas {
+      display: block;
+      margin: 0 auto;
+      background: #222;
+      box-shadow: 0 0 30px #444;
+      border-radius: 10px;
+    }
+  </style>
+</head>
+<body>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/addons/p5.sound.min.js"></script>
+
+<script>
 let blocks = [];
 let draggingBlock = null;
 let dragOffsetX, dragOffsetY;
@@ -7,7 +34,7 @@ function setup() {
   textAlign(CENTER, CENTER);
   textSize(18);
   colorMode(HSL);
-  
+
   // Initialize blocks with position, color, note, velocity (for throwing)
   blocks.push(new Block(50, 150, 'C', 0));
   blocks.push(new Block(150, 150, 'D', 60));
@@ -18,23 +45,21 @@ function setup() {
 
 function draw() {
   background(20);
-  
+
   // Update & draw blocks
   for (let block of blocks) {
     block.update();
   }
-  
-  // After update, draw all blocks
+
   for (let block of blocks) {
     block.draw();
   }
-  
+
   // Check touches / mouse pressed for playing notes
   handleTouchAndPlay();
 }
 
 function handleTouchAndPlay() {
-  // For every block, check if mouse or touches overlap it
   for (let block of blocks) {
     if (block.isTouched()) {
       block.playNote();
@@ -51,11 +76,11 @@ function mousePressed() {
       draggingBlock = blocks[i];
       dragOffsetX = mouseX - draggingBlock.x;
       dragOffsetY = mouseY - draggingBlock.y;
-      
+
       // Bring this block to top
       blocks.splice(i, 1);
       blocks.push(draggingBlock);
-      draggingBlock.vel.set(0,0);  // Stop throwing on grab
+      draggingBlock.vel.set(0, 0);  // Stop throwing on grab
       break;
     }
   }
@@ -71,7 +96,7 @@ function mouseDragged() {
 function mouseReleased() {
   if (draggingBlock) {
     // Simple throw: velocity based on mouse movement
-    draggingBlock.vel.set((mouseX - pmouseX)*0.5, (mouseY - pmouseY)*0.5);
+    draggingBlock.vel.set((mouseX - pmouseX) * 0.5, (mouseY - pmouseY) * 0.5);
     draggingBlock = null;
   }
 }
@@ -83,17 +108,15 @@ class Block {
     this.size = 80;
     this.note = note;
     this.hue = hue;
-    this.vel = createVector(0,0);
-    
-    // Placeholder oscillator for sound
+    this.vel = createVector(0, 0);
+
     this.osc = new p5.Oscillator('sine');
     this.osc.freq(this.getFreq());
     this.osc.amp(0);
     this.osc.start();
   }
-  
+
   getFreq() {
-    // Simple frequency map for notes (C major scale octave 4)
     const freqs = {
       'C': 261.63,
       'D': 293.66,
@@ -103,75 +126,72 @@ class Block {
     };
     return freqs[this.note] || 440;
   }
-  
+
   contains(px, py) {
-    // Check if point px, py is inside this block’s rectangle (rounded edges considered approx)
     return (px > this.x && px < this.x + this.size && py > this.y && py < this.y + this.size);
   }
-  
+
   isTouched() {
-    // Check for mouse or any touch points inside block
     if (this.contains(mouseX, mouseY) && mouseIsPressed) return true;
-    
-    for(let t of touches) {
-      if(this.contains(t.x, t.y)) return true;
+    for (let t of touches) {
+      if (this.contains(t.x, t.y)) return true;
     }
     return false;
   }
-  
+
   playNote() {
-    this.osc.amp(0.5, 0.1); // Fade in amplitude to 0.5
+    this.osc.amp(0.5, 0.1);
   }
-  
+
   stopNote() {
-    this.osc.amp(0, 0.1);  // Fade out amplitude
+    this.osc.amp(0, 0.1);
   }
-  
+
   update() {
-    // Update position with velocity for throwing, slow down velocity (friction)
     this.x += this.vel.x;
     this.y += this.vel.y;
-    
+
     this.vel.mult(0.9);
-    
-    // Keep inside canvas bounds with bounce
-    if(this.x < 0) {
+
+    // Bounce off edges
+    if (this.x < 0) {
       this.x = 0;
       this.vel.x *= -0.5;
     }
-    if(this.x + this.size > width) {
+    if (this.x + this.size > width) {
       this.x = width - this.size;
       this.vel.x *= -0.5;
     }
-    if(this.y < 0) {
+    if (this.y < 0) {
       this.y = 0;
       this.vel.y *= -0.5;
     }
-    if(this.y + this.size > height) {
+    if (this.y + this.size > height) {
       this.y = height - this.size;
       this.vel.y *= -0.5;
     }
   }
-  
+
   draw() {
     push();
-    translate(this.x + this.size/2, this.y + this.size/2);
-    
-    // Glow effect by drawing blurred colored shadows
+    translate(this.x + this.size / 2, this.y + this.size / 2);
+
     drawingContext.shadowBlur = 20;
     drawingContext.shadowColor = color(this.hue, 100, 60, 0.7).toString();
-    
-    // Vibrant color fill
+
     fill(this.hue, 80, 60);
     stroke(this.hue, 90, 50);
     strokeWeight(3);
     rectMode(CENTER);
-    rect(0, 0, this.size, this.size, 20);  // Rounded corners
-    
-    // Draw note letter
+    rect(0, 0, this.size, this.size, 20);
+
     noStroke();
     fill(0, 0, 100);
     text(this.note, 0, 0);
     pop();
   }
 }
+</script>
+
+</body>
+</html>
