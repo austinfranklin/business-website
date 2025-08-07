@@ -1,363 +1,283 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Block Music Tracks</title>
-  <style>
-    body {
-      margin: 0;
-      background: #111;
-      font-family: sans-serif;
-      color: white;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 20px;
-    }
-
-    .track-container {
-      border: 2px solid #444;
-      padding: 20px;
-      margin-bottom: 40px;
-      width: 90%;
-      max-width: 1000px;
-      box-sizing: border-box;
-    }
-
-    canvas.track-canvas {
-      width: 100%;
-      height: 200px;
-      display: block;
-      background: #222;
-      border: 1px solid #333;
-      margin-top: 10px;
-    }
-
-    .toolbar {
-      margin-top: 10px;
-    }
-
-    .note-button {
-      padding: 6px 10px;
-      margin: 2px;
-      border: none;
-      cursor: pointer;
-      color: #111;
-      font-weight: bold;
-      border-radius: 4px;
-    }
-
-    .controls {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: space-between;
-      align-items: center;
-      margin-top: 10px;
-      gap: 12px;
-    }
-
-    .controls label {
-      margin-right: 10px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      white-space: nowrap;
-    }
-
-    select, input[type="range"] {
-      cursor: pointer;
-      margin-left: 6px;
-    }
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+<title>Mobile-Friendly Synth Track Block</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    padding: 20px;
+    background: #121212;
+    color: #eee;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    margin: 0;
+  }
+  #track-container {
+    background: #1f1f1f;
+    padding: 20px;
+    border-radius: 10px;
+    width: 90vw;
+    max-width: 400px;
+    box-shadow: 0 0 20px #00ccff66;
+    user-select: none;
+  }
+  button {
+    display: block;
+    width: 100%;
+    margin: 12px 0;
+    font-size: 1.3rem;
+    padding: 15px;
+    border: none;
+    border-radius: 8px;
+    background: #00ccff;
+    color: #121212;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.3s ease;
+  }
+  button:active {
+    background: #0088cc;
+  }
+  label {
+    margin-top: 15px;
+    font-size: 1.1rem;
+  }
+  input[type=range] {
+    width: 100%;
+    margin-top: 8px;
+    -webkit-appearance: none;
+    background: #333;
+    height: 8px;
+    border-radius: 6px;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 24px;
+    height: 24px;
+    background: #00ccff;
+    cursor: pointer;
+    border-radius: 50%;
+    margin-top: -8px;
+  }
+  input[type=range]:focus {
+    outline: none;
+  }
+</style>
 </head>
 <body>
-  <div id="track1" class="track-container">
-    <div class="controls">
-      <label>Track 1 Speed: <input id="speed1" type="range" min="1" max="10" value="2" /></label>
-      <label>Waveform:
-        <select id="waveform1">
-          <option value="sine" selected>Sine</option>
-          <option value="square">Square</option>
-          <option value="sawtooth">Sawtooth</option>
-          <option value="triangle">Triangle</option>
-        </select>
-      </label>
-      <label>Attack (ms):
-        <input id="attack1" type="range" min="0" max="500" value="20" />
-      </label>
-      <label>Release (ms):
-        <input id="release1" type="range" min="0" max="500" value="150" />
-      </label>
-      <button id="clear1">Clear Blocks</button>
-    </div>
-    <div class="toolbar" id="toolbar1"></div>
-    <canvas id="canvas1" class="track-canvas"></canvas>
-  </div>
 
-  <div id="track2" class="track-container">
-    <div class="controls">
-      <label>Track 2 Speed: <input id="speed2" type="range" min="1" max="10" value="3" /></label>
-      <label>Waveform:
-        <select id="waveform2">
-          <option value="sine" selected>Sine</option>
-          <option value="square">Square</option>
-          <option value="sawtooth">Sawtooth</option>
-          <option value="triangle">Triangle</option>
-        </select>
-      </label>
-      <label>Attack (ms):
-        <input id="attack2" type="range" min="0" max="500" value="20" />
-      </label>
-      <label>Release (ms):
-        <input id="release2" type="range" min="0" max="500" value="150" />
-      </label>
-      <button id="clear2">Clear Blocks</button>
-    </div>
-    <div class="toolbar" id="toolbar2"></div>
-    <canvas id="canvas2" class="track-canvas"></canvas>
-  </div>
+<h1>Mobile-Friendly Synth Track Block</h1>
+<div id="track-container">
+  <button id="change-sound-btn">Change Sound (sine)</button>
+  
+  <label for="attack-slider">Attack Time (seconds): <span id="attack-val">0.05</span></label>
+  <input type="range" id="attack-slider" min="0.01" max="1" step="0.01" value="0.05" />
+  
+  <label for="release-slider">Release Time (seconds): <span id="release-val">0.3</span></label>
+  <input type="range" id="release-slider" min="0.01" max="2" step="0.01" value="0.3" />
+  
+  <button id="play-btn">Play Note</button>
+</div>
 
-  <script>
-    const notes = [
-      { name: "C", freq: 261.63 },
-      { name: "C#", freq: 277.18 },
-      { name: "D", freq: 293.66 },
-      { name: "D#", freq: 311.13 },
-      { name: "E", freq: 329.63 },
-      { name: "F", freq: 349.23 },
-      { name: "F#", freq: 369.99 },
-      { name: "G", freq: 392.00 },
-      { name: "G#", freq: 415.30 },
-      { name: "A", freq: 440.00 },
-      { name: "A#", freq: 466.16 },
-      { name: "B", freq: 493.88 }
-    ];
+<script>
+(() => {
+  let audioContext;
+  let isAudioStarted = false;
 
-    const BLOCK_SIZE = 40;
-    const NOTE_DURATION_MS = 200;
-    let audioCtx = null;
+  // Mobile-compatible AudioContext creation
+  function createAudioContext() {
+    if (!audioContext) {
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    return audioContext;
+  }
 
-    function ensureAudio() {
-      if (!audioCtx) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  class Synth {
+    constructor(ctx) {
+      this.ctx = ctx;
+      this.oscillator = null;
+      this.gainNode = this.ctx.createGain();
+      this.gainNode.gain.value = 0;
+      this.gainNode.connect(this.ctx.destination);
+
+      this.oscType = 'sine';
+      this.attack = 0.05;
+      this.release = 0.3;
+    }
+
+    setSound(type) {
+      this.oscType = type || 'sine';
+      if (this.oscillator) {
+        this.oscillator.type = this.oscType;
       }
     }
 
-    function playTone(freq, waveform, attack, release) {
-      ensureAudio();
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.type = waveform;
-      osc.frequency.value = freq;
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-
-      const now = audioCtx.currentTime;
-      const attackSec = attack / 1000;
-      const releaseSec = release / 1000;
-      const sustainTime = Math.max(0, 0.2 - attackSec - releaseSec);
-
-      gain.gain.setValueAtTime(0, now);
-      gain.gain.linearRampToValueAtTime(0.2, now + attackSec);
-      gain.gain.setValueAtTime(0.2, now + attackSec + sustainTime);
-      gain.gain.linearRampToValueAtTime(0, now + attackSec + sustainTime + releaseSec);
-
-      osc.start(now);
-      osc.stop(now + attackSec + sustainTime + releaseSec);
+    setEnvelope(attack, release) {
+      this.attack = attack;
+      this.release = release;
     }
 
-    class Block {
-      constructor(x, y, noteIdx, synthSettings) {
-        this.x = x;
-        this.y = y;
-        this.vx = 0;
-        this.vy = 0;
-        this.noteIdx = noteIdx;
-        this.isDragging = false;
-        this.playLock = false;
-        this.glow = 0;
-
-        // synth settings per block
-        this.waveform = synthSettings.waveform;
-        this.attack = synthSettings.attack;
-        this.release = synthSettings.release;
+    play(freq) {
+      if (!this.oscillator) {
+        this.oscillator = this.ctx.createOscillator();
+        this.oscillator.type = this.oscType;
+        this.oscillator.frequency.setValueAtTime(freq, this.ctx.currentTime);
+        this.oscillator.connect(this.gainNode);
+        this.oscillator.start();
+      } else {
+        this.oscillator.frequency.setValueAtTime(freq, this.ctx.currentTime);
       }
 
-      update(blocks, H, W) {
-        if (!this.isDragging) {
-          this.vy += 0.5; // gravity
-          this.y += this.vy;
-          this.x += this.vx;
+      const now = this.ctx.currentTime;
+      this.gainNode.gain.cancelScheduledValues(now);
+      this.gainNode.gain.setValueAtTime(0, now);
+      this.gainNode.gain.linearRampToValueAtTime(1, now + this.attack);
+    }
 
-          // simple ground collision
-          if (this.y + BLOCK_SIZE > H) {
-            this.y = H - BLOCK_SIZE;
-            this.vy = 0;
-          }
-
-          // simple block collisions
-          for (let other of blocks) {
-            if (other !== this && this.collidesWith(other)) {
-              const overlapY = (this.y + BLOCK_SIZE) - other.y;
-              if (overlapY > 0 && this.vy > 0) {
-                this.y -= overlapY;
-                this.vy = 0;
-              }
-            }
-          }
+    stop() {
+      if (!this.oscillator) return;
+      const now = this.ctx.currentTime;
+      this.gainNode.gain.cancelScheduledValues(now);
+      this.gainNode.gain.setValueAtTime(this.gainNode.gain.value, now);
+      this.gainNode.gain.linearRampToValueAtTime(0, now + this.release);
+      setTimeout(() => {
+        if (this.oscillator) {
+          this.oscillator.stop();
+          this.oscillator.disconnect();
+          this.oscillator = null;
         }
+      }, (this.release + 0.1) * 1000);
+    }
+  }
 
-        if (this.glow > 0) this.glow -= 0.05;
-      }
+  // Setup UI and interaction logic
+  function init() {
+    createAudioContext();
 
-      collidesWith(other) {
-        return (
-          this.x < other.x + BLOCK_SIZE &&
-          this.x + BLOCK_SIZE > other.x &&
-          this.y < other.y + BLOCK_SIZE &&
-          this.y + BLOCK_SIZE > other.y
-        );
-      }
+    const synth = new Synth(audioContext);
+    const container = document.getElementById('track-container');
 
-      draw(ctx) {
-        const hue = this.noteIdx * 30;
-        ctx.fillStyle = `hsl(${hue}, 100%, ${this.glow > 0 ? 80 : 60}%)`;
-        ctx.fillRect(this.x, this.y, BLOCK_SIZE, BLOCK_SIZE);
-      }
+    const soundBtn = document.getElementById('change-sound-btn');
+    const playBtn = document.getElementById('play-btn');
+    const attackSlider = document.getElementById('attack-slider');
+    const releaseSlider = document.getElementById('release-slider');
+    const attackVal = document.getElementById('attack-val');
+    const releaseVal = document.getElementById('release-val');
 
-      intersectsPlayhead(px) {
-        return px >= this.x && px <= this.x + BLOCK_SIZE;
+    const sounds = ['sine', 'square', 'triangle', 'sawtooth'];
+    let currentSoundIndex = 0;
+
+    function updateSoundText() {
+      soundBtn.textContent = `Change Sound (${sounds[currentSoundIndex]})`;
+    }
+    updateSoundText();
+
+    // Unlock audio context on first interaction (mobile browsers)
+    function startAudioContext() {
+      if (!isAudioStarted) {
+        audioContext.resume().then(() => {
+          isAudioStarted = true;
+        });
       }
     }
 
-    function setupTrack(canvasId, toolbarId, speedSliderId, waveformId, attackId, releaseId, clearBtnId) {
-      const canvas = document.getElementById(canvasId);
-      const ctx = canvas.getContext("2d");
-      const toolbar = document.getElementById(toolbarId);
-      const speedSlider = document.getElementById(speedSliderId);
-      const waveformSelect = document.getElementById(waveformId);
-      const attackSlider = document.getElementById(attackId);
-      const releaseSlider = document.getElementById(releaseId);
-      const clearBtn = document.getElementById(clearBtnId);
-
-      const blocks = [];
-      let W, H;
-
-      function resizeCanvas() {
-        const rect = canvas.getBoundingClientRect();
-        canvas.width = rect.width;
-        canvas.height = rect.height;
-        W = rect.width;
-        H = rect.height;
-      }
-
-      resizeCanvas();
-      window.addEventListener("resize", resizeCanvas);
-
-      let playheadX = 0;
-      let playSpeed = Number(speedSlider.value);
-
-      speedSlider.addEventListener("input", (e) => playSpeed = Number(e.target.value));
-
-      // Default synth settings for this track
-      let synthSettings = {
-        waveform: waveformSelect.value,
-        attack: Number(attackSlider.value),
-        release: Number(releaseSlider.value)
-      };
-
-      waveformSelect.addEventListener("change", (e) => {
-        synthSettings.waveform = e.target.value;
-      });
-      attackSlider.addEventListener("input", (e) => {
-        synthSettings.attack = Number(e.target.value);
-      });
-      releaseSlider.addEventListener("input", (e) => {
-        synthSettings.release = Number(e.target.value);
-      });
-
-      notes.forEach((note, i) => {
-        const btn = document.createElement("button");
-        btn.className = "note-button";
-        btn.style.background = `hsl(${i * 30}, 100%, 60%)`;
-        btn.innerText = note.name;
-        btn.onclick = () => {
-          ensureAudio();
-          const x = 20 + Math.random() * (W - 40 - BLOCK_SIZE);
-          blocks.push(new Block(x, 20, i, synthSettings));
-        };
-        toolbar.appendChild(btn);
-      });
-
-      clearBtn.addEventListener("click", () => {
-        blocks.length = 0; // clear all blocks
-      });
-
-      let dragTarget = null;
-      let dragOffset = { x: 0, y: 0 };
-
-      canvas.addEventListener("mousedown", (e) => {
-        const mx = e.offsetX;
-        const my = e.offsetY;
-        for (let b of [...blocks].reverse()) {
-          if (mx >= b.x && mx <= b.x + BLOCK_SIZE && my >= b.y && my <= b.y + BLOCK_SIZE) {
-            dragTarget = b;
-            b.isDragging = true;
-            dragOffset = { x: mx - b.x, y: my - b.y };
-            b.vx = b.vy = 0;
-            playTone(notes[b.noteIdx].freq, b.waveform, b.attack, b.release);
-            b.glow = 1;
-            break;
-          }
-        }
-      });
-
-      canvas.addEventListener("mousemove", (e) => {
-        if (dragTarget) {
-          dragTarget.x = e.offsetX - dragOffset.x;
-          dragTarget.y = e.offsetY - dragOffset.y;
-        }
-      });
-
-      canvas.addEventListener("mouseup", () => {
-        if (dragTarget) {
-          dragTarget.isDragging = false;
-          dragTarget = null;
-        }
-      });
-
-      function animate() {
-        ctx.clearRect(0, 0, W, H);
-
-        for (let b of blocks) {
-          b.update(blocks, H, W);
-          b.draw(ctx);
-          if (!b.playLock && b.intersectsPlayhead(playheadX)) {
-            playTone(notes[b.noteIdx].freq, b.waveform, b.attack, b.release);
-            b.playLock = true;
-            b.glow = 1;
-            setTimeout(() => b.playLock = false, NOTE_DURATION_MS);
-          }
-        }
-
-        ctx.strokeStyle = "#fff";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(playheadX, 0);
-        ctx.lineTo(playheadX, H);
-        ctx.stroke();
-
-        playheadX += playSpeed;
-        if (playheadX > W) playheadX = 0;
-
-        requestAnimationFrame(animate);
-      }
-
-      animate();
+    // Cycle through oscillator types
+    function cycleSound() {
+      currentSoundIndex = (currentSoundIndex + 1) % sounds.length;
+      const newSound = sounds[currentSoundIndex];
+      synth.setSound(newSound);
+      updateSoundText();
     }
 
-    setupTrack("canvas1", "toolbar1", "speed1", "waveform1", "attack1", "release1", "clear1");
-    setupTrack("canvas2", "toolbar2", "speed2", "waveform2", "attack2", "release2", "clear2");
-  </script>
+    // Play or stop the synth note
+    let isPlaying = false;
+    function togglePlay() {
+      if (!isAudioStarted) {
+        audioContext.resume().then(() => {
+          isAudioStarted = true;
+          playNote();
+        });
+      } else {
+        if (isPlaying) {
+          synth.stop();
+          playBtn.textContent = 'Play Note';
+          isPlaying = false;
+        } else {
+          playNote();
+        }
+      }
+    }
+
+    function playNote() {
+      synth.play(440); // Fixed frequency for demo
+      playBtn.textContent = 'Stop Note';
+      isPlaying = true;
+    }
+
+    // Update envelope params on slider change
+    function updateAttack(e) {
+      const val = parseFloat(e.target.value);
+      synth.setEnvelope(val, synth.release);
+      attackVal.textContent = val.toFixed(2);
+    }
+    function updateRelease(e) {
+      const val = parseFloat(e.target.value);
+      synth.setEnvelope(synth.attack, val);
+      releaseVal.textContent = val.toFixed(2);
+    }
+
+    // Event listeners with touch and click support
+    ['click', 'touchstart'].forEach(evt => {
+      soundBtn.addEventListener(evt, e => {
+        e.preventDefault();
+        startAudioContext();
+        cycleSound();
+      }, { passive: false });
+
+      playBtn.addEventListener(evt, e => {
+        e.preventDefault();
+        startAudioContext();
+        togglePlay();
+      }, { passive: false });
+    });
+
+    attackSlider.addEventListener('input', e => {
+      updateAttack(e);
+    });
+
+    releaseSlider.addEventListener('input', e => {
+      updateRelease(e);
+    });
+
+    // On page load, initialize envelope values
+    synth.setEnvelope(parseFloat(attackSlider.value), parseFloat(releaseSlider.value));
+  }
+
+  // Setup interaction unlock for audio on mobile
+  function setupStartAudioListener() {
+    function startAudio() {
+      if (!audioContext) createAudioContext();
+      audioContext.resume().then(() => {
+        isAudioStarted = true;
+        window.removeEventListener('touchstart', startAudio);
+        window.removeEventListener('click', startAudio);
+      });
+    }
+    window.addEventListener('touchstart', startAudio, { passive: true });
+    window.addEventListener('click', startAudio, { passive: true });
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    setupStartAudioListener();
+    init();
+  });
+})();
+</script>
+
 </body>
 </html>
