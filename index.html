@@ -168,7 +168,7 @@
     let dragTarget = null;
     let dragOffset = { x: 0, y: 0 };
 
-    canvas.addEventListener("pointerdown", (e) => {
+    canvas.addEventListener("mousedown", (e) => {
       ensureAudio();
       const mx = e.clientX;
       const my = e.clientY;
@@ -187,14 +187,14 @@
       }
     });
 
-    canvas.addEventListener("pointermove", (e) => {
+    canvas.addEventListener("mousemove", (e) => {
       if (dragTarget) {
         dragTarget.x = e.clientX - dragOffset.x;
         dragTarget.y = e.clientY - dragOffset.y;
       }
     });
 
-    canvas.addEventListener("pointerup", () => {
+    canvas.addEventListener("mouseup", () => {
       if (dragTarget) {
         dragTarget.isDragging = false;
         dragTarget.playLock = false;
