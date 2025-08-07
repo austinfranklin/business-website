@@ -1,197 +1,391 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Glowing Draggable Blocks with Sound</title>
-  <style>
-    body {
-      margin: 0;
-      background: #111;
-      overflow: hidden;
-      touch-action: none; /* prevent default touch gestures */
-    }
-    canvas {
-      display: block;
-      margin: 0 auto;
-      background: #222;
-      box-shadow: 0 0 30px #444;
-      border-radius: 10px;
-    }
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Chromatic Musical Blocks - Improved</title>
+<style>
+  body {
+    margin: 0;
+    background: #111;
+    overflow: hidden;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  }
+  canvas {
+    display: block;
+    background: #111;
+  }
+</style>
 </head>
 <body>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/addons/p5.sound.min.js"></script>
+<canvas id="canvas"></canvas>
 
 <script>
-let blocks = [];
-let draggingBlock = null;
-let dragOffsetX, dragOffsetY;
+const NOTES = [
+  'C4', 'C#4', 'D4', 'D#4', 'E4', 'F4',
+  'F#4', 'G4', 'G#4', 'A4', 'A#4', 'B4'
+];
 
-function setup() {
-  createCanvas(600, 400);
-  textAlign(CENTER, CENTER);
-  textSize(18);
-  colorMode(HSL);
+const COLORS = [
+  '#FF4136', '#FF851B', '#FFDC00', '#2ECC40', '#39CCCC', '#0074D9',
+  '#B10DC9', '#85144b', '#3D9970', '#7FDBFF', '#FF6347', '#FF4500'
+];
 
-  // Initialize blocks with position, color, note, velocity (for throwing)
-  blocks.push(new Block(50, 150, 'C', 0));
-  blocks.push(new Block(150, 150, 'D', 60));
-  blocks.push(new Block(250, 150, 'E', 120));
-  blocks.push(new Block(350, 150, 'F', 180));
-  blocks.push(new Block(450, 150, 'G', 240));
-}
+const NOTE_FREQS = {
+  'C4': 261.63, 'C#4': 277.18, 'D4': 293.66, 'D#4': 311.13,
+  'E4': 329.63, 'F4': 349.23, 'F#4': 369.99, 'G4': 392.00,
+  'G#4': 415.30, 'A4': 440.00, 'A#4': 466.16, 'B4': 493.88
+};
 
-function draw() {
-  background(20);
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+let W = window.innerWidth;
+let H = window.innerHeight;
+canvas.width = W;
+canvas.height = H;
 
-  // Update & draw blocks
-  for (let block of blocks) {
-    block.update();
-  }
-
-  for (let block of blocks) {
-    block.draw();
-  }
-
-  // Check touches / mouse pressed for playing notes
-  handleTouchAndPlay();
-}
-
-function handleTouchAndPlay() {
-  for (let block of blocks) {
-    if (block.isTouched()) {
-      block.playNote();
-    } else {
-      block.stopNote();
-    }
-  }
-}
-
-function mousePressed() {
-  // Find topmost block under mouse to drag
-  for (let i = blocks.length - 1; i >= 0; i--) {
-    if (blocks[i].contains(mouseX, mouseY)) {
-      draggingBlock = blocks[i];
-      dragOffsetX = mouseX - draggingBlock.x;
-      dragOffsetY = mouseY - draggingBlock.y;
-
-      // Bring this block to top
-      blocks.splice(i, 1);
-      blocks.push(draggingBlock);
-      draggingBlock.vel.set(0, 0);  // Stop throwing on grab
-      break;
-    }
-  }
-}
-
-function mouseDragged() {
-  if (draggingBlock) {
-    draggingBlock.x = mouseX - dragOffsetX;
-    draggingBlock.y = mouseY - dragOffsetY;
-  }
-}
-
-function mouseReleased() {
-  if (draggingBlock) {
-    // Simple throw: velocity based on mouse movement
-    draggingBlock.vel.set((mouseX - pmouseX) * 0.5, (mouseY - pmouseY) * 0.5);
-    draggingBlock = null;
-  }
-}
+const GRAVITY = 0.5;
+const BLOCK_SIZE = 60;
+const blocks = [];
+const activePairs = new Map();
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
 class Block {
-  constructor(x, y, note, hue) {
+  constructor(x, note, color) {
     this.x = x;
-    this.y = y;
-    this.size = 80;
+    this.y = Math.random() * H * 0.25;
+    this.vx = 0;
+    this.vy = 0;
+    this.width = BLOCK_SIZE;
+    this.height = BLOCK_SIZE;
     this.note = note;
-    this.hue = hue;
-    this.vel = createVector(0, 0);
-
-    this.osc = new p5.Oscillator('sine');
-    this.osc.freq(this.getFreq());
-    this.osc.amp(0);
-    this.osc.start();
-  }
-
-  getFreq() {
-    const freqs = {
-      'C': 261.63,
-      'D': 293.66,
-      'E': 329.63,
-      'F': 349.23,
-      'G': 392.00
-    };
-    return freqs[this.note] || 440;
-  }
-
-  contains(px, py) {
-    return (px > this.x && px < this.x + this.size && py > this.y && py < this.y + this.size);
-  }
-
-  isTouched() {
-    if (this.contains(mouseX, mouseY) && mouseIsPressed) return true;
-    for (let t of touches) {
-      if (this.contains(t.x, t.y)) return true;
-    }
-    return false;
-  }
-
-  playNote() {
-    this.osc.amp(0.5, 0.1);
-  }
-
-  stopNote() {
-    this.osc.amp(0, 0.1);
-  }
-
-  update() {
-    this.x += this.vel.x;
-    this.y += this.vel.y;
-
-    this.vel.mult(0.9);
-
-    // Bounce off edges
-    if (this.x < 0) {
-      this.x = 0;
-      this.vel.x *= -0.5;
-    }
-    if (this.x + this.size > width) {
-      this.x = width - this.size;
-      this.vel.x *= -0.5;
-    }
-    if (this.y < 0) {
-      this.y = 0;
-      this.vel.y *= -0.5;
-    }
-    if (this.y + this.size > height) {
-      this.y = height - this.size;
-      this.vel.y *= -0.5;
-    }
+    this.color = color;
+    this.isDragging = false;
+    this.dragOffset = {x: 0, y: 0};
+    this.lastMousePos = {x: 0, y: 0};
+    this.lastMouseTime = 0;
+    this.throwVelocity = {x: 0, y: 0};
   }
 
   draw() {
-    push();
-    translate(this.x + this.size / 2, this.y + this.size / 2);
+    // Glow effect
+    ctx.shadowColor = this.color;
+    ctx.shadowBlur = 15;
 
-    drawingContext.shadowBlur = 20;
-    drawingContext.shadowColor = color(this.hue, 100, 60, 0.7).toString();
+    // Rounded rectangle
+    const radius = 12;
+    ctx.fillStyle = this.color;
+    ctx.beginPath();
+    ctx.moveTo(this.x + radius, this.y);
+    ctx.lineTo(this.x + this.width - radius, this.y);
+    ctx.quadraticCurveTo(this.x + this.width, this.y, this.x + this.width, this.y + radius);
+    ctx.lineTo(this.x + this.width, this.y + this.height - radius);
+    ctx.quadraticCurveTo(this.x + this.width, this.y + this.height, this.x + this.width - radius, this.y + this.height);
+    ctx.lineTo(this.x + radius, this.y + this.height);
+    ctx.quadraticCurveTo(this.x, this.y + this.height, this.x, this.y + this.height - radius);
+    ctx.lineTo(this.x, this.y + radius);
+    ctx.quadraticCurveTo(this.x, this.y, this.x + radius, this.y);
+    ctx.closePath();
+    ctx.fill();
 
-    fill(this.hue, 80, 60);
-    stroke(this.hue, 90, 50);
-    strokeWeight(3);
-    rectMode(CENTER);
-    rect(0, 0, this.size, this.size, 20);
+    // Text
+    ctx.shadowBlur = 0; // Disable glow for text
+    ctx.fillStyle = '#fff';
+    ctx.font = "bold 18px 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(this.note, this.x + this.width / 2, this.y + this.height / 2);
+  }
 
-    noStroke();
-    fill(0, 0, 100);
-    text(this.note, 0, 0);
-    pop();
+  update(deltaTime) {
+    if (!this.isDragging) {
+      // Apply throw velocity with friction
+      this.vx += this.throwVelocity.x;
+      this.vy += this.throwVelocity.y;
+
+      // Gravity
+      this.vy += GRAVITY;
+
+      // Friction slows down throw velocity gradually
+      this.throwVelocity.x *= 0.85;
+      this.throwVelocity.y *= 0.85;
+
+      // Update position
+      this.x += this.vx;
+      this.y += this.vy;
+
+      // Boundaries with bounce
+      if (this.x < 0) {
+        this.x = 0;
+        this.vx = -this.vx * 0.6;
+        this.throwVelocity.x = -this.throwVelocity.x * 0.6;
+      }
+      if (this.x + this.width > W) {
+        this.x = W - this.width;
+        this.vx = -this.vx * 0.6;
+        this.throwVelocity.x = -this.throwVelocity.x * 0.6;
+      }
+
+      // Floor collision
+      if (this.y + this.height > H) {
+        this.y = H - this.height;
+        this.vy = 0;
+        this.throwVelocity.y = 0;
+      }
+
+      // Stack collision - improved to handle multiple collisions correctly
+      for (let other of blocks) {
+        if (other !== this && this.isCollidingWith(other)) {
+          // Only resolve collision if falling
+          if (this.vy > 0 && this.y + this.height <= other.y + this.vy + 1) {
+            this.y = other.y - this.height;
+            this.vy = 0;
+            this.throwVelocity.y = 0;
+          }
+
+          // Horizontal collision to prevent blocks passing through sideways
+          if (this.x < other.x + other.width && this.x + this.width > other.x) {
+            if (this.x < other.x) {
+              this.x = other.x - this.width;
+              this.vx = -this.vx * 0.5;
+              this.throwVelocity.x = -this.throwVelocity.x * 0.5;
+            } else {
+              this.x = other.x + other.width;
+              this.vx = -this.vx * 0.5;
+              this.throwVelocity.x = -this.throwVelocity.x * 0.5;
+            }
+          }
+        }
+      }
+    } else {
+      // While dragging, reset velocities to zero for better control
+      this.vx = 0;
+      this.vy = 0;
+      this.throwVelocity = {x: 0, y: 0};
+    }
+  }
+
+  isCollidingWith(other) {
+    return this.x < other.x + other.width &&
+           this.x + this.width > other.x &&
+           this.y < other.y + other.height &&
+           this.y + this.height > other.y;
+  }
+
+  getIdWith(other) {
+    return [this.note, other.note].sort().join("-");
   }
 }
-</script>
 
+function playNotePair(id, note1, note2) {
+  if (activePairs.has(id)) return;
+
+  const freq1 = NOTE_FREQS[note1];
+  const freq2 = NOTE_FREQS[note2];
+
+  const gain = audioCtx.createGain();
+  gain.gain.setValueAtTime(0, audioCtx.currentTime);
+  gain.gain.linearRampToValueAtTime(0.15, audioCtx.currentTime + 0.02);
+
+  const osc1 = audioCtx.createOscillator();
+  const osc2 = audioCtx.createOscillator();
+  osc1.type = 'sine';
+  osc2.type = 'sine';
+  osc1.frequency.value = freq1;
+  osc2.frequency.value = freq2;
+
+  osc1.connect(gain);
+  osc2.connect(gain);
+  gain.connect(audioCtx.destination);
+
+  osc1.start();
+  osc2.start();
+
+  activePairs.set(id, {osc1, osc2, gain});
+}
+
+function stopNotePair(id) {
+  const pair = activePairs.get(id);
+  if (pair) {
+    const now = audioCtx.currentTime;
+    pair.gain.gain.cancelScheduledValues(now);
+    pair.gain.gain.setValueAtTime(pair.gain.gain.value, now);
+    pair.gain.gain.linearRampToValueAtTime(0.0, now + 0.03);
+    pair.osc1.stop(now + 0.05);
+    pair.osc2.stop(now + 0.05);
+    activePairs.delete(id);
+  }
+}
+
+function updateCollisions() {
+  const touchingPairs = new Set();
+
+  for (let i = 0; i < blocks.length; i++) {
+    for (let j = i + 1; j < blocks.length; j++) {
+      const a = blocks[i];
+      const b = blocks[j];
+      if (a.isCollidingWith(b)) {
+        const id = a.getIdWith(b);
+        touchingPairs.add(id);
+        playNotePair(id, a.note, b.note);
+      }
+    }
+  }
+
+  // Stop any non-touching active notes
+  for (let id of [...activePairs.keys()]) {
+    if (!touchingPairs.has(id)) {
+      stopNotePair(id);
+    }
+  }
+}
+
+let lastTime = 0;
+function animate(time = 0) {
+  const deltaTime = (time - lastTime) / 1000; // in seconds
+  lastTime = time;
+
+  ctx.clearRect(0, 0, W, H);
+  for (let b of blocks) {
+    b.update(deltaTime);
+    b.draw();
+  }
+  updateCollisions();
+  requestAnimationFrame(animate);
+}
+
+function spawnBlocks() {
+  blocks.length = 0;
+  for (let i = 0; i < NOTES.length; i++) {
+    const x = 60 + i * (BLOCK_SIZE + 12);
+    blocks.push(new Block(x, NOTES[i], COLORS[i % COLORS.length]));
+  }
+}
+
+function enableDragging() {
+  let draggingBlock = null;
+  let lastMousePos = {x: 0, y: 0};
+  let lastMouseTime = 0;
+
+  canvas.addEventListener('mousedown', (e) => {
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
+    const mx = e.clientX;
+    const my = e.clientY;
+
+    // Iterate backwards so top blocks (drawn last) get priority
+    for (let i = blocks.length -1; i >= 0; i--) {
+      let b = blocks[i];
+      if (mx >= b.x && mx <= b.x + b.width && my >= b.y && my <= b.y + b.height) {
+        draggingBlock = b;
+        b.isDragging = true;
+        b.dragOffset.x = mx - b.x;
+        b.dragOffset.y = my - b.y;
+        b.vx = 0;
+        b.vy = 0;
+        b.throwVelocity = {x: 0, y: 0};
+        b.lastMousePos = {x: mx, y: my};
+        b.lastMouseTime = performance.now();
+        // Bring dragged block to front
+        blocks.splice(i, 1);
+        blocks.push(b);
+        break;
+      }
+    }
+  });
+
+  canvas.addEventListener('mousemove', (e) => {
+    if (!draggingBlock) return;
+    const mx = e.clientX;
+    const my = e.clientY;
+    const now = performance.now();
+
+    draggingBlock.x = mx - draggingBlock.dragOffset.x;
+    draggingBlock.y = my - draggingBlock.dragOffset.y;
+
+    // Calculate velocity for throwing
+    const dt = (now - draggingBlock.lastMouseTime) / 1000 || 0.016;
+    draggingBlock.throwVelocity.x = (mx - draggingBlock.lastMousePos.x) / dt * 0.3; // dampened a bit
+    draggingBlock.throwVelocity.y = (my - draggingBlock.lastMousePos.y) / dt * 0.3;
+
+    draggingBlock.lastMousePos = {x: mx, y: my};
+    draggingBlock.lastMouseTime = now;
+  });
+
+  canvas.addEventListener('mouseup', (e) => {
+    if (draggingBlock) {
+      draggingBlock.isDragging = false;
+      draggingBlock = null;
+    }
+  });
+
+  // Support touch events as well
+  canvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
+    const touch = e.touches[0];
+    const mx = touch.clientX;
+    const my = touch.clientY;
+
+    for (let i = blocks.length -1; i >= 0; i--) {
+      let b = blocks[i];
+      if (mx >= b.x && mx <= b.x + b.width && my >= b.y && my <= b.y + b.height) {
+        draggingBlock = b;
+        b.isDragging = true;
+        b.dragOffset.x = mx - b.x;
+        b.dragOffset.y = my - b.y;
+        b.vx = 0;
+        b.vy = 0;
+        b.throwVelocity = {x: 0, y: 0};
+        b.lastMousePos = {x: mx, y: my};
+        b.lastMouseTime = performance.now();
+        blocks.splice(i, 1);
+        blocks.push(b);
+        break;
+      }
+    }
+  }, {passive:false});
+
+  canvas.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    if (!draggingBlock) return;
+    const touch = e.touches[0];
+    const mx = touch.clientX;
+    const my = touch.clientY;
+    const now = performance.now();
+
+    draggingBlock.x = mx - draggingBlock.dragOffset.x;
+    draggingBlock.y = my - draggingBlock.dragOffset.y;
+
+    const dt = (now - draggingBlock.lastMouseTime) / 1000 || 0.016;
+    draggingBlock.throwVelocity.x = (mx - draggingBlock.lastMousePos.x) / dt * 0.3;
+    draggingBlock.throwVelocity.y = (my - draggingBlock.lastMousePos.y) / dt * 0.3;
+
+    draggingBlock.lastMousePos = {x: mx, y: my};
+    draggingBlock.lastMouseTime = now;
+  }, {passive:false});
+
+  canvas.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    if (draggingBlock) {
+      draggingBlock.isDragging = false;
+      draggingBlock = null;
+    }
+  });
+}
+
+// Resize canvas on window resize
+window.addEventListener('resize', () => {
+  W = window.innerWidth;
+  H = window.innerHeight;
+  canvas.width = W;
+  canvas.height = H;
+});
+
+spawnBlocks();
+enableDragging();
+animate();
+</script>
 </body>
 </html>
