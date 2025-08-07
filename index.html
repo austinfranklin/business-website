@@ -2,121 +2,117 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Multi-Track Music Blocks</title>
+  <title>Block Music Tracks</title>
   <style>
-    html, body {
+    body {
       margin: 0;
-      padding: 0;
       background: #111;
       font-family: sans-serif;
       color: white;
-      height: 100%;
-      overflow: hidden;
-    }
-    #container {
       display: flex;
       flex-direction: column;
-      gap: 20px;
+      align-items: center;
       padding: 20px;
+    }
+
+    .track-container {
+      border: 2px solid #444;
+      padding: 20px;
+      margin-bottom: 40px;
+      width: 90%;
+      max-width: 1000px;
       box-sizing: border-box;
-      height: 100%;
     }
-    .track-wrapper {
-      position: relative;
-      border: 2px solid #333;
-      border-radius: 12px;
-      padding: 10px;
-      background: #222;
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-    }
-    canvas {
-      flex: 1;
-      background: #111;
-      height: 25%;
+
+    canvas.track-canvas {
+      width: 100%;
+      height: 200px;
       display: block;
-      border-radius: 8px;
+      background: #222;
+      border: 1px solid #333;
+      margin-top: 10px;
     }
+
     .toolbar {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      margin-bottom: 10px;
+      margin-top: 10px;
     }
+
     .note-button {
-      width: 40px;
-      height: 40px;
-      border-radius: 6px;
+      padding: 6px 10px;
+      margin: 2px;
       border: none;
       cursor: pointer;
+      color: #111;
       font-weight: bold;
+      border-radius: 4px;
     }
-    .speed-control {
-      margin-left: auto;
+
+    .controls {
       display: flex;
+      justify-content: space-between;
       align-items: center;
-      gap: 5px;
+      margin-top: 10px;
+    }
+
+    .controls label {
+      margin-right: 10px;
     }
   </style>
 </head>
 <body>
-  <div id="container">
-    <div class="track-wrapper">
-      <div class="toolbar" id="toolbar1"></div>
-      <canvas id="canvas1"></canvas>
-      <div class="speed-control">
-        <label>Speed: <input type="range" min="1" max="20" value="5" id="speedSlider1"></label>
-      </div>
+  <div id="track1" class="track-container">
+    <div class="controls">
+      <label>Track 1 Speed: <input id="speed1" type="range" min="1" max="10" value="2" /></label>
     </div>
-    <div class="track-wrapper">
-      <div class="toolbar" id="toolbar2"></div>
-      <canvas id="canvas2"></canvas>
-      <div class="speed-control">
-        <label>Speed: <input type="range" min="1" max="20" value="5" id="speedSlider2"></label>
-      </div>
+    <div class="toolbar" id="toolbar1"></div>
+    <canvas id="canvas1" class="track-canvas"></canvas>
+  </div>
+
+  <div id="track2" class="track-container">
+    <div class="controls">
+      <label>Track 2 Speed: <input id="speed2" type="range" min="1" max="10" value="3" /></label>
     </div>
+    <div class="toolbar" id="toolbar2"></div>
+    <canvas id="canvas2" class="track-canvas"></canvas>
   </div>
 
   <script>
-    const NOTE_DURATION_MS = 250;
-    const BLOCK_SIZE = 60;
-    const GRAVITY = 0.7;
-    const BOUNCE = 0.2;
-    const FRICTION = 0.9;
-
     const notes = [
-      { freq: 261.63, name: 'C' },
-      { freq: 277.18, name: 'C#' },
-      { freq: 293.66, name: 'D' },
-      { freq: 311.13, name: 'D#' },
-      { freq: 329.63, name: 'E' },
-      { freq: 349.23, name: 'F' },
-      { freq: 369.99, name: 'F#' },
-      { freq: 392.00, name: 'G' },
-      { freq: 415.30, name: 'G#' },
-      { freq: 440.00, name: 'A' },
-      { freq: 466.16, name: 'A#' },
-      { freq: 493.88, name: 'B' }
+      { name: "C", freq: 261.63 },
+      { name: "C#", freq: 277.18 },
+      { name: "D", freq: 293.66 },
+      { name: "D#", freq: 311.13 },
+      { name: "E", freq: 329.63 },
+      { name: "F", freq: 349.23 },
+      { name: "F#", freq: 369.99 },
+      { name: "G", freq: 392.00 },
+      { name: "G#", freq: 415.30 },
+      { name: "A", freq: 440.00 },
+      { name: "A#", freq: 466.16 },
+      { name: "B", freq: 493.88 }
     ];
 
-    let audioCtx;
+    const BLOCK_SIZE = 40;
+    const NOTE_DURATION_MS = 200;
+    let audioCtx = null;
+
     function ensureAudio() {
-      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
     }
+
     function playTone(freq) {
       ensureAudio();
       const osc = audioCtx.createOscillator();
       const gain = audioCtx.createGain();
       osc.frequency.value = freq;
-      osc.type = "sine";
-      gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + NOTE_DURATION_MS / 1000);
       osc.connect(gain);
       gain.connect(audioCtx.destination);
       osc.start();
-      osc.stop(audioCtx.currentTime + NOTE_DURATION_MS / 1000);
+      gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
+      osc.stop(audioCtx.currentTime + 0.2);
     }
 
     class Block {
@@ -126,191 +122,160 @@
         this.vx = 0;
         this.vy = 0;
         this.noteIdx = noteIdx;
-        this.color = `hsl(${noteIdx * 30}, 100%, 60%)`;
-        this.glow = 0;
         this.isDragging = false;
         this.playLock = false;
-      }
-
-      get bottom() {
-        return this.y + BLOCK_SIZE;
-      }
-
-      get right() {
-        return this.x + BLOCK_SIZE;
-      }
-
-      intersectsPlayhead(px) {
-        return px >= this.x && px <= this.x + BLOCK_SIZE;
+        this.glow = 0;
       }
 
       update(blocks, H, W) {
         if (!this.isDragging) {
-          this.vy += GRAVITY;
-          let nextY = this.y + this.vy;
-          let nextX = this.x + this.vx;
+          this.vy += 0.5; // gravity
+          this.y += this.vy;
+          this.x += this.vx;
 
+          // simple ground collision
+          if (this.y + BLOCK_SIZE > H) {
+            this.y = H - BLOCK_SIZE;
+            this.vy = 0;
+          }
+
+          // simple block collisions
           for (let other of blocks) {
-            if (other === this) continue;
-            const collX = nextX < other.right && nextX + BLOCK_SIZE > other.x;
-            const falling = this.vy > 0;
-            const collY = nextY + BLOCK_SIZE > other.y && this.bottom <= other.y;
-            if (falling && collX && collY) {
-              this.vy = 0;
-              this.y = other.y - BLOCK_SIZE;
-              break;
+            if (other !== this && this.collidesWith(other)) {
+              const overlapY = (this.y + BLOCK_SIZE) - other.y;
+              if (overlapY > 0 && this.vy > 0) {
+                this.y -= overlapY;
+                this.vy = 0;
+              }
             }
           }
-
-          if (this.y + BLOCK_SIZE >= H) {
-            this.y = H - BLOCK_SIZE;
-            this.vy *= -BOUNCE;
-            this.vx *= FRICTION;
-          } else {
-            this.y += this.vy;
-          }
-
-          if (this.x <= 0 || this.x + BLOCK_SIZE >= W) {
-            this.vx *= -BOUNCE;
-          }
-
-          this.x += this.vx;
-          this.vx *= 0.98;
-          this.vy *= 0.98;
         }
 
         if (this.glow > 0) this.glow -= 0.05;
       }
 
+      collidesWith(other) {
+        return (
+          this.x < other.x + BLOCK_SIZE &&
+          this.x + BLOCK_SIZE > other.x &&
+          this.y < other.y + BLOCK_SIZE &&
+          this.y + BLOCK_SIZE > other.y
+        );
+      }
+
       draw(ctx) {
-        ctx.fillStyle = this.color;
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.roundRect(this.x, this.y, BLOCK_SIZE, BLOCK_SIZE, 8);
-        ctx.fill();
-        if (this.glow > 0) {
-          ctx.fillStyle = `rgba(255,255,255,${this.glow})`;
-          ctx.fill();
-        }
-        ctx.stroke();
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 14px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(notes[this.noteIdx].name, this.x + BLOCK_SIZE / 2, this.y + BLOCK_SIZE / 2);
+        const hue = this.noteIdx * 30;
+        ctx.fillStyle = `hsl(${hue}, 100%, ${this.glow > 0 ? 80 : 60}%)`;
+        ctx.fillRect(this.x, this.y, BLOCK_SIZE, BLOCK_SIZE);
+      }
+
+      intersectsPlayhead(px) {
+        return px >= this.x && px <= this.x + BLOCK_SIZE;
       }
     }
 
     function setupTrack(canvasId, toolbarId, speedSliderId) {
-        const canvas = document.getElementById(canvasId);
-        const ctx = canvas.getContext("2d");
+      const canvas = document.getElementById(canvasId);
+      const ctx = canvas.getContext("2d");
+      const toolbar = document.getElementById(toolbarId);
+      const speedSlider = document.getElementById(speedSliderId);
+      const blocks = [];
+      let W, H;
 
-        const toolbar = document.getElementById(toolbarId);
-        const speedSlider = document.getElementById(speedSliderId);
+      function resizeCanvas() {
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = rect.width;
+        canvas.height = rect.height;
+        W = rect.width;
+        H = rect.height;
+      }
 
-        // ✅ High-DPI and sizing fix
-        function resizeCanvas() {
-            const dpr = window.devicePixelRatio || 1;
-            canvas.width = canvas.clientWidth * dpr;
-            canvas.height = canvas.clientHeight * dpr;
-            ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform before scaling
-            ctx.scale(dpr, dpr);
+      resizeCanvas();
+      window.addEventListener("resize", resizeCanvas);
+
+      let playheadX = 0;
+      let playSpeed = Number(speedSlider.value);
+
+      speedSlider.addEventListener("input", (e) => playSpeed = Number(e.target.value));
+
+      notes.forEach((note, i) => {
+        const btn = document.createElement("button");
+        btn.className = "note-button";
+        btn.style.background = `hsl(${i * 30}, 100%, 60%)`;
+        btn.innerText = note.name;
+        btn.onclick = () => {
+          ensureAudio();
+          const x = 20 + Math.random() * (W - 40 - BLOCK_SIZE);
+          blocks.push(new Block(x, 20, i));
+        };
+        toolbar.appendChild(btn);
+      });
+
+      let dragTarget = null;
+      let dragOffset = { x: 0, y: 0 };
+
+      canvas.addEventListener("mousedown", (e) => {
+        const mx = e.offsetX;
+        const my = e.offsetY;
+        for (let b of [...blocks].reverse()) {
+          if (mx >= b.x && mx <= b.x + BLOCK_SIZE && my >= b.y && my <= b.y + BLOCK_SIZE) {
+            dragTarget = b;
+            b.isDragging = true;
+            dragOffset = { x: mx - b.x, y: my - b.y };
+            b.vx = b.vy = 0;
+            playTone(notes[b.noteIdx].freq);
+            b.glow = 1;
+            break;
+          }
+        }
+      });
+
+      canvas.addEventListener("mousemove", (e) => {
+        if (dragTarget) {
+          dragTarget.x = e.offsetX - dragOffset.x;
+          dragTarget.y = e.offsetY - dragOffset.y;
+        }
+      });
+
+      canvas.addEventListener("mouseup", () => {
+        if (dragTarget) {
+          dragTarget.isDragging = false;
+          dragTarget = null;
+        }
+      });
+
+      function animate() {
+        ctx.clearRect(0, 0, W, H);
+
+        for (let b of blocks) {
+          b.update(blocks, H, W);
+          b.draw(ctx);
+          if (!b.playLock && b.intersectsPlayhead(playheadX)) {
+            playTone(notes[b.noteIdx].freq);
+            b.playLock = true;
+            b.glow = 1;
+            setTimeout(() => b.playLock = false, NOTE_DURATION_MS);
+          }
         }
 
-        resizeCanvas();
-        window.addEventListener("resize", resizeCanvas);
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(playheadX, 0);
+        ctx.lineTo(playheadX, H);
+        ctx.stroke();
 
-        let W = canvas.clientWidth;
-        let H = canvas.clientHeight;
+        playheadX += playSpeed;
+        if (playheadX > W) playheadX = 0;
 
-        const blocks = [];
-        let playheadX = 0;
-        let playSpeed = Number(speedSlider.value);
+        requestAnimationFrame(animate);
+      }
 
-        speedSlider.addEventListener("input", (e) => playSpeed = Number(e.target.value));
-
-        notes.forEach((note, i) => {
-            const btn = document.createElement("button");
-            btn.className = "note-button";
-            btn.style.background = `hsl(${i * 30}, 100%, 60%)`;
-            btn.innerText = note.name;
-            btn.onclick = () => {
-            ensureAudio();
-            const x = 20 + Math.random() * (W - 40 - BLOCK_SIZE);
-            blocks.push(new Block(x, 20, i));
-            };
-            toolbar.appendChild(btn);
-        });
-
-        let dragTarget = null;
-        let dragOffset = { x: 0, y: 0 };
-
-        canvas.addEventListener("mousedown", (e) => {
-            const mx = e.offsetX;
-            const my = e.offsetY;
-            for (let b of [...blocks].reverse()) {
-            if (mx >= b.x && mx <= b.x + BLOCK_SIZE && my >= b.y && my <= b.y + BLOCK_SIZE) {
-                dragTarget = b;
-                b.isDragging = true;
-                dragOffset = { x: mx - b.x, y: my - b.y };
-                b.vx = b.vy = 0;
-                playTone(notes[b.noteIdx].freq);
-                b.glow = 1;
-                break;
-            }
-            }
-        });
-
-        canvas.addEventListener("mousemove", (e) => {
-            if (dragTarget) {
-            dragTarget.x = e.offsetX - dragOffset.x;
-            dragTarget.y = e.offsetY - dragOffset.y;
-            }
-        });
-
-        canvas.addEventListener("mouseup", () => {
-            if (dragTarget) {
-            dragTarget.isDragging = false;
-            dragTarget = null;
-            }
-        });
-
-        function animate() {
-            W = canvas.clientWidth;
-            H = canvas.clientHeight;
-
-            ctx.clearRect(0, 0, W, H);
-
-            for (let b of blocks) {
-            b.update(blocks, H, W);
-            b.draw(ctx);
-            if (!b.playLock && b.intersectsPlayhead(playheadX)) {
-                playTone(notes[b.noteIdx].freq);
-                b.playLock = true;
-                b.glow = 1;
-                setTimeout(() => b.playLock = false, NOTE_DURATION_MS);
-            }
-            }
-
-            ctx.strokeStyle = "#fff";
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(playheadX, 0);
-            ctx.lineTo(playheadX, H);
-            ctx.stroke();
-
-            playheadX += playSpeed;
-            if (playheadX > W) playheadX = 0;
-
-            requestAnimationFrame(animate);
-        }
-
-        animate();
+      animate();
     }
 
-    setupTrack("canvas1", "toolbar1", "speedSlider1");
-    setupTrack("canvas2", "toolbar2", "speedSlider2");
+    setupTrack("canvas1", "toolbar1", "speed1");
+    setupTrack("canvas2", "toolbar2", "speed2");
   </script>
 </body>
 </html>
