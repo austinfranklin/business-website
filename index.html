@@ -65,272 +65,280 @@
   <canvas id="canvas"></canvas>
 
   <script>
-    const canvas = document.getElementById("canvas");
-    const ctx = canvas.getContext("2d");
-    let W = canvas.width = window.innerWidth;
-    let H = canvas.height = window.innerHeight;
+  const canvas = document.getElementById("canvas");
+  const ctx = canvas.getContext("2d");
+  let W = canvas.width = window.innerWidth;
+  let H = canvas.height = window.innerHeight;
 
-    window.addEventListener("resize", () => {
-      W = canvas.width = window.innerWidth;
-      H = canvas.height = window.innerHeight;
-    });
+  window.addEventListener("resize", () => {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+  });
 
-    const BLOCK_SIZE = 60;
-    const GRAVITY = 0.7;
-    const FRICTION = 0.9;
-    const BOUNCE = 0.2;
-    const NOTE_DURATION_MS = 250;
+  const BLOCK_SIZE = 60;
+  const GRAVITY = 0.7;
+  const FRICTION = 0.9;
+  const BOUNCE = 0.2;
+  const NOTE_DURATION_MS = 250;
 
-    const notes = [
-        261.63, 277.18, 293.66, 311.13, 329.63, 349.23,
-        369.99, 392.00, 415.30, 440.00, 466.16, 493.88
-    ];
+  const notes = [
+    261.63, 277.18, 293.66, 311.13, 329.63, 349.23,
+    369.99, 392.00, 415.30, 440.00, 466.16, 493.88
+  ];
+  const noteNames = [
+    "C", "C#", "D", "D#", "E", "F",
+    "F#", "G", "G#", "A", "A#", "B"
+  ];
 
-    const noteNames = [
-        "C", "C#", "D", "D#", "E", "F",
-        "F#", "G", "G#", "A", "A#", "B"
-    ];
+  let playheadX = 0;
+  let playSpeed = Number(document.getElementById("speedSlider").value);
+  document.getElementById("speedSlider").addEventListener("input", (e) => {
+    playSpeed = Number(e.target.value);
+  });
 
-    let playheadX = 0;
-    let playSpeed = Number(document.getElementById("speedSlider").value);
+  let audioCtx;
+  function ensureAudio() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
 
-    document.getElementById("speedSlider").addEventListener("input", (e) => {
-      playSpeed = Number(e.target.value);
-    });
+  function playTone(freq) {
+    ensureAudio();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.frequency.value = freq;
+    osc.type = "sine";
+    gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + NOTE_DURATION_MS / 1000);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + NOTE_DURATION_MS / 1000);
+  }
 
-    let audioCtx;
-    function ensureAudio() {
-      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  class Block {
+    constructor(x, noteIdx) {
+      this.x = x;
+      this.y = Math.random() * H * 0.4;
+      this.vx = 0;
+      this.vy = 0;
+      this.noteIdx = noteIdx;
+      this.color = `hsl(${noteIdx * 30}, 100%, 60%)`;
+      this.isDragging = false;
+      this.dragOffsetX = 0;
+      this.dragOffsetY = 0;
+      this.playLock = false;
+      this.highlightTimer = 0;
     }
 
-    function playTone(freq) {
-      ensureAudio();
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.frequency.value = freq;
-      osc.type = "sine";
-      gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + NOTE_DURATION_MS / 1000);
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.start();
-      osc.stop(audioCtx.currentTime + NOTE_DURATION_MS / 1000);
+    get bottom() {
+      return this.y + BLOCK_SIZE;
     }
 
-    class Block {
-      constructor(x, noteIdx) {
-        this.x = x;
-        this.y = Math.random() * H * 0.4;
-        this.vx = 0;
-        this.vy = 0;
-        this.noteIdx = noteIdx;
-        this.color = `hsl(${noteIdx * 30}, 100%, 60%)`;
-        this.isDragging = false;
-        this.playLock = false;
-        this.highlightTimer = 0;
-      }
+    get right() {
+      return this.x + BLOCK_SIZE;
+    }
 
-      get bottom() {
-        return this.y + BLOCK_SIZE;
-      }
+    contains(mx, my) {
+      return mx >= this.x && mx <= this.right && my >= this.y && my <= this.bottom;
+    }
 
-      get right() {
-        return this.x + BLOCK_SIZE;
-      }
+    intersectsPlayhead(px) {
+      return px >= this.x && px <= this.x + BLOCK_SIZE;
+    }
 
-      intersectsPlayhead(px) {
-        return px >= this.x && px <= this.x + BLOCK_SIZE;
-      }
+    update(blocks) {
+      if (!this.isDragging) {
+        this.vy += GRAVITY;
+        let nextY = this.y + this.vy;
+        let nextX = this.x + this.vx;
 
-      update(blocks) {
-        if (!this.isDragging) {
-          this.vy += GRAVITY;
-          let nextY = this.y + this.vy;
-          let nextX = this.x + this.vx;
+        for (let other of blocks) {
+          if (other === this) continue;
 
-          for (let other of blocks) {
-            if (other === this) continue;
+          const collideX = nextX < other.x + BLOCK_SIZE && nextX + BLOCK_SIZE > other.x;
+          const collideY = nextY < other.y + BLOCK_SIZE && nextY + BLOCK_SIZE > other.y;
 
-            const collideX = nextX < other.x + BLOCK_SIZE && nextX + BLOCK_SIZE > other.x;
-            const collideY = nextY < other.y + BLOCK_SIZE && nextY + BLOCK_SIZE > other.y;
-
-            if (collideX && collideY) {
-              if (this.vy > 0 && this.bottom <= other.y + 10) {
-                this.vy = 0;
-                this.y = other.y - BLOCK_SIZE;
+          if (collideX && collideY) {
+            if (this.vy > 0 && this.bottom <= other.y + 10) {
+              this.vy = 0;
+              this.y = other.y - BLOCK_SIZE;
+            }
+            if (this.vx !== 0) {
+              if (this.x < other.x) {
+                this.x = other.x - BLOCK_SIZE;
+              } else {
+                this.x = other.x + BLOCK_SIZE;
               }
-              if (this.vx !== 0) {
-                if (this.x < other.x) {
-                  this.x = other.x - BLOCK_SIZE;
-                } else {
-                  this.x = other.x + BLOCK_SIZE;
-                }
-                this.vx = 0;
-              }
+              this.vx = 0;
             }
           }
-
-          if (this.bottom >= H) {
-            this.y = H - BLOCK_SIZE;
-            this.vy *= -BOUNCE;
-            this.vx *= FRICTION;
-          } else {
-            this.y += this.vy;
-          }
-
-          if (this.x <= 0 || this.x + BLOCK_SIZE >= W) {
-            this.vx *= -BOUNCE;
-          }
-
-          this.x += this.vx;
-          this.vx *= 0.98;
-          this.vy *= 0.98;
         }
 
-        if (this.highlightTimer > 0) this.highlightTimer--;
-      }
-
-      draw() {
-        ctx.save();
-        if (this.highlightTimer > 0) {
-          ctx.shadowColor = "white";
-          ctx.shadowBlur = 20;
+        if (this.bottom >= H) {
+          this.y = H - BLOCK_SIZE;
+          this.vy *= -BOUNCE;
+          this.vx *= FRICTION;
+        } else {
+          this.y += this.vy;
         }
 
-        ctx.fillStyle = this.color;
-        ctx.strokeStyle = "#fff";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.roundRect(this.x, this.y, BLOCK_SIZE, BLOCK_SIZE, 8);
-        ctx.fill();
-        ctx.stroke();
-
-        ctx.fillStyle = "#fff";
-        ctx.font = "bold 14px sans-serif";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(noteNames[this.noteIdx], this.x + BLOCK_SIZE / 2, this.y + BLOCK_SIZE / 2);
-
-        ctx.restore();
-      }
-    }
-
-    let blocks = [];
-    function initBlocks() {
-      blocks = [];
-      for (let i = 0; i < 12; i++) {
-        const x = (i + 1) * (W / 13) - BLOCK_SIZE / 2;
-        blocks.push(new Block(x, i));
-      }
-    }
-
-    function addRandomBlock(x = null, y = null) {
-      const noteIdx = Math.floor(Math.random() * notes.length);
-      const bx = x ?? Math.random() * (W - BLOCK_SIZE);
-      const block = new Block(bx, noteIdx);
-      if (y !== null) block.y = y;
-      blocks.push(block);
-    }
-
-    function removeLastBlock() {
-      blocks.pop();
-    }
-
-    document.getElementById("addBlock").addEventListener("click", () => {
-      ensureAudio();
-      addRandomBlock();
-    });
-
-    document.getElementById("removeBlock").addEventListener("click", () => {
-      removeLastBlock();
-    });
-
-    // Create buttons for each pitch
-    const noteButtonsContainer = document.getElementById("noteButtons");
-
-    noteNames.forEach((name, idx) => {
-    const btn = document.createElement("button");
-    btn.textContent = name;
-    btn.addEventListener("click", () => {
-        ensureAudio();
-        const x = Math.random() * (W - BLOCK_SIZE);
-        blocks.push(new Block(x, idx));
-        playTone(notes[idx]);
-    });
-    noteButtonsContainer.appendChild(btn);
-    });
-
-    document.getElementById("clearBlocks").addEventListener("click", () => {
-    blocks = [];
-    });
-
-    canvas.addEventListener("mousedown", (e) => {
-      ensureAudio();
-      const mx = e.clientX;
-      const my = e.clientY;
-      for (let b of [...blocks].reverse()) {
-        if (mx >= b.x && mx <= b.x + BLOCK_SIZE &&
-            my >= b.y && my <= b.y + BLOCK_SIZE) {
-          dragTarget = b;
-          b.isDragging = true;
-          dragOffset.x = mx - b.x;
-          dragOffset.y = my - b.y;
-          b.vx = b.vy = 0;
-          b.playLock = true;
-          playTone(notes[b.noteIdx]);
-          b.highlightTimer = 10;
-          return;
+        if (this.x <= 0 || this.x + BLOCK_SIZE >= W) {
+          this.vx *= -BOUNCE;
         }
+
+        this.x += this.vx;
+        this.vx *= 0.98;
+        this.vy *= 0.98;
       }
 
-      // Spawn new block at click
-      addRandomBlock(mx - BLOCK_SIZE / 2, my - BLOCK_SIZE / 2);
-    });
+      if (this.highlightTimer > 0) this.highlightTimer--;
+    }
 
-    canvas.addEventListener("mousemove", (e) => {
-      if (dragTarget) {
-        dragTarget.x = e.clientX - dragOffset.x;
-        dragTarget.y = e.clientY - dragOffset.y;
-      }
-    });
-
-    canvas.addEventListener("mouseup", () => {
-      if (dragTarget) {
-        dragTarget.isDragging = false;
-        dragTarget.playLock = false;
-        dragTarget = null;
-      }
-    });
-
-    function animate() {
-      ctx.clearRect(0, 0, W, H);
-
-      for (let b of blocks) {
-        b.update(blocks);
-        b.draw();
-        if (!b.playLock && b.intersectsPlayhead(playheadX)) {
-          playTone(notes[b.noteIdx]);
-          b.playLock = true;
-          b.highlightTimer = 10;
-          setTimeout(() => b.playLock = false, NOTE_DURATION_MS);
-        }
+    draw() {
+      ctx.save();
+      if (this.highlightTimer > 0) {
+        ctx.shadowColor = "white";
+        ctx.shadowBlur = 20;
       }
 
+      ctx.fillStyle = this.color;
       ctx.strokeStyle = "#fff";
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.moveTo(playheadX, 0);
-      ctx.lineTo(playheadX, H);
+      ctx.roundRect(this.x, this.y, BLOCK_SIZE, BLOCK_SIZE, 8);
+      ctx.fill();
       ctx.stroke();
 
-      playheadX += playSpeed;
-      if (playheadX > W) playheadX = 0;
+      ctx.fillStyle = "#fff";
+      ctx.font = "bold 14px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(noteNames[this.noteIdx], this.x + BLOCK_SIZE / 2, this.y + BLOCK_SIZE / 2);
 
-      requestAnimationFrame(animate);
+      ctx.restore();
+    }
+  }
+
+  let blocks = [];
+  function initBlocks() {
+    blocks = [];
+    for (let i = 0; i < 12; i++) {
+      const x = (i + 1) * (W / 13) - BLOCK_SIZE / 2;
+      blocks.push(new Block(x, i));
+    }
+  }
+
+  function addRandomBlock(x = null, y = null) {
+    const noteIdx = Math.floor(Math.random() * notes.length);
+    const bx = x ?? Math.random() * (W - BLOCK_SIZE);
+    const block = new Block(bx, noteIdx);
+    if (y !== null) block.y = y;
+    blocks.push(block);
+  }
+
+  function removeLastBlock() {
+    blocks.pop();
+  }
+
+  document.getElementById("addBlock").addEventListener("click", () => {
+    ensureAudio();
+    addRandomBlock();
+  });
+
+  document.getElementById("removeBlock").addEventListener("click", () => {
+    removeLastBlock();
+  });
+
+  const noteButtonsContainer = document.getElementById("noteButtons");
+  noteNames.forEach((name, idx) => {
+    const btn = document.createElement("button");
+    btn.textContent = name;
+    btn.addEventListener("click", () => {
+      ensureAudio();
+      const x = Math.random() * (W - BLOCK_SIZE);
+      blocks.push(new Block(x, idx));
+      playTone(notes[idx]);
+    });
+    noteButtonsContainer.appendChild(btn);
+  });
+
+  document.getElementById("clearBlocks").addEventListener("click", () => {
+    blocks = [];
+  });
+
+  // Drag logic
+  let draggingBlock = null;
+
+  canvas.addEventListener("mousedown", (e) => {
+    const mx = e.clientX;
+    const my = e.clientY;
+    for (let block of blocks.slice().reverse()) {
+      if (block.contains(mx, my)) {
+        draggingBlock = block;
+        block.isDragging = true;
+        block.dragOffsetX = mx - block.x;
+        block.dragOffsetY = my - block.y;
+        break;
+      }
+    }
+  });
+
+  canvas.addEventListener("mousemove", (e) => {
+    if (draggingBlock) {
+      draggingBlock.x = e.clientX - draggingBlock.dragOffsetX;
+      draggingBlock.y = e.clientY - draggingBlock.dragOffsetY;
+      draggingBlock.vx = 0;
+      draggingBlock.vy = 0;
+    }
+  });
+
+  canvas.addEventListener("mouseup", () => {
+    if (draggingBlock) {
+      draggingBlock.isDragging = false;
+      draggingBlock = null;
+    }
+  });
+
+  canvas.addEventListener("mouseleave", () => {
+    if (draggingBlock) {
+      draggingBlock.isDragging = false;
+      draggingBlock = null;
+    }
+  });
+
+  function animate() {
+    ctx.clearRect(0, 0, W, H);
+
+    playheadX += playSpeed;
+    if (playheadX > W) playheadX = 0;
+
+    for (let block of blocks) {
+      block.update(blocks);
+
+      if (block.intersectsPlayhead(playheadX) && !block.playLock) {
+        block.playLock = true;
+        block.highlightTimer = 10;
+        playTone(notes[block.noteIdx]);
+        setTimeout(() => {
+          block.playLock = false;
+        }, NOTE_DURATION_MS);
+      }
+
+      block.draw();
     }
 
-    initBlocks();
-    animate();
-  </script>
+    // Draw playhead
+    ctx.strokeStyle = "red";
+    ctx.beginPath();
+    ctx.moveTo(playheadX, 0);
+    ctx.lineTo(playheadX, H);
+    ctx.stroke();
+
+    requestAnimationFrame(animate);
+  }
+
+  initBlocks();
+  animate();
+</script>
 </body>
 </html>
