@@ -202,99 +202,112 @@
     }
 
     function setupTrack(canvasId, toolbarId, speedSliderId) {
-      const canvas = document.getElementById(canvasId);
-      const ctx = canvas.getContext("2d");
-      const toolbar = document.getElementById(toolbarId);
-      const speedSlider = document.getElementById(speedSliderId);
-      let W = canvas.width = canvas.offsetWidth;
-      let H = canvas.height = canvas.offsetHeight;
+        const canvas = document.getElementById(canvasId);
+        const ctx = canvas.getContext("2d");
 
-      window.addEventListener("resize", () => {
-        W = canvas.width = canvas.offsetWidth;
-        H = canvas.height = canvas.offsetHeight;
-      });
+        const toolbar = document.getElementById(toolbarId);
+        const speedSlider = document.getElementById(speedSliderId);
 
-      const blocks = [];
-      let playheadX = 0;
-      let playSpeed = Number(speedSlider.value);
-
-      speedSlider.addEventListener("input", (e) => playSpeed = Number(e.target.value));
-
-      notes.forEach((note, i) => {
-        const btn = document.createElement("button");
-        btn.className = "note-button";
-        btn.style.background = `hsl(${i * 30}, 100%, 60%)`;
-        btn.innerText = note.name;
-        btn.onclick = () => {
-          ensureAudio();
-          const x = 20 + Math.random() * (W - 40 - BLOCK_SIZE);
-          blocks.push(new Block(x, 20, i));
-        };
-        toolbar.appendChild(btn);
-      });
-
-      let dragTarget = null;
-      let dragOffset = { x: 0, y: 0 };
-
-      canvas.addEventListener("mousedown", (e) => {
-        const mx = e.offsetX;
-        const my = e.offsetY;
-        for (let b of [...blocks].reverse()) {
-          if (mx >= b.x && mx <= b.x + BLOCK_SIZE && my >= b.y && my <= b.y + BLOCK_SIZE) {
-            dragTarget = b;
-            b.isDragging = true;
-            dragOffset = { x: mx - b.x, y: my - b.y };
-            b.vx = b.vy = 0;
-            playTone(notes[b.noteIdx].freq);
-            b.glow = 1;
-            break;
-          }
-        }
-      });
-
-      canvas.addEventListener("mousemove", (e) => {
-        if (dragTarget) {
-          dragTarget.x = e.offsetX - dragOffset.x;
-          dragTarget.y = e.offsetY - dragOffset.y;
-        }
-      });
-
-      canvas.addEventListener("mouseup", () => {
-        if (dragTarget) {
-          dragTarget.isDragging = false;
-          dragTarget = null;
-        }
-      });
-
-      function animate() {
-        ctx.clearRect(0, 0, W, H);
-
-        for (let b of blocks) {
-          b.update(blocks, H, W);
-          b.draw(ctx);
-          if (!b.playLock && b.intersectsPlayhead(playheadX)) {
-            playTone(notes[b.noteIdx].freq);
-            b.playLock = true;
-            b.glow = 1;
-            setTimeout(() => b.playLock = false, NOTE_DURATION_MS);
-          }
+        // ✅ High-DPI and sizing fix
+        function resizeCanvas() {
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = canvas.clientWidth * dpr;
+            canvas.height = canvas.clientHeight * dpr;
+            ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform before scaling
+            ctx.scale(dpr, dpr);
         }
 
-        ctx.strokeStyle = "#fff";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(playheadX, 0);
-        ctx.lineTo(playheadX, H);
-        ctx.stroke();
+        resizeCanvas();
+        window.addEventListener("resize", resizeCanvas);
 
-        playheadX += playSpeed;
-        if (playheadX > W) playheadX = 0;
+        let W = canvas.clientWidth;
+        let H = canvas.clientHeight;
 
-        requestAnimationFrame(animate);
-      }
+        const blocks = [];
+        let playheadX = 0;
+        let playSpeed = Number(speedSlider.value);
 
-      animate();
+        speedSlider.addEventListener("input", (e) => playSpeed = Number(e.target.value));
+
+        notes.forEach((note, i) => {
+            const btn = document.createElement("button");
+            btn.className = "note-button";
+            btn.style.background = `hsl(${i * 30}, 100%, 60%)`;
+            btn.innerText = note.name;
+            btn.onclick = () => {
+            ensureAudio();
+            const x = 20 + Math.random() * (W - 40 - BLOCK_SIZE);
+            blocks.push(new Block(x, 20, i));
+            };
+            toolbar.appendChild(btn);
+        });
+
+        let dragTarget = null;
+        let dragOffset = { x: 0, y: 0 };
+
+        canvas.addEventListener("mousedown", (e) => {
+            const mx = e.offsetX;
+            const my = e.offsetY;
+            for (let b of [...blocks].reverse()) {
+            if (mx >= b.x && mx <= b.x + BLOCK_SIZE && my >= b.y && my <= b.y + BLOCK_SIZE) {
+                dragTarget = b;
+                b.isDragging = true;
+                dragOffset = { x: mx - b.x, y: my - b.y };
+                b.vx = b.vy = 0;
+                playTone(notes[b.noteIdx].freq);
+                b.glow = 1;
+                break;
+            }
+            }
+        });
+
+        canvas.addEventListener("mousemove", (e) => {
+            if (dragTarget) {
+            dragTarget.x = e.offsetX - dragOffset.x;
+            dragTarget.y = e.offsetY - dragOffset.y;
+            }
+        });
+
+        canvas.addEventListener("mouseup", () => {
+            if (dragTarget) {
+            dragTarget.isDragging = false;
+            dragTarget = null;
+            }
+        });
+
+        function animate() {
+            W = canvas.clientWidth;
+            H = canvas.clientHeight;
+
+            ctx.clearRect(0, 0, W, H);
+
+            for (let b of blocks) {
+            b.update(blocks, H, W);
+            b.draw(ctx);
+            if (!b.playLock && b.intersectsPlayhead(playheadX)) {
+                playTone(notes[b.noteIdx].freq);
+                b.playLock = true;
+                b.glow = 1;
+                setTimeout(() => b.playLock = false, NOTE_DURATION_MS);
+            }
+            }
+
+            ctx.strokeStyle = "#fff";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(playheadX, 0);
+            ctx.lineTo(playheadX, H);
+            ctx.stroke();
+
+            playheadX += playSpeed;
+            if (playheadX > W) playheadX = 0;
+
+            requestAnimationFrame(animate);
+        }
+
+        animate();
     }
+
 
     setupTrack("canvas1", "toolbar1", "speedSlider1");
     setupTrack("canvas2", "toolbar2", "speedSlider2");
