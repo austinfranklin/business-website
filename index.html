@@ -29,7 +29,7 @@
   <div id="speedControl">
     <label>
       Playhead Speed:
-      <input type="range" id="speedSlider" min="1" max="50" value="10">
+      <input type="range" id="speedSlider" min="1" max="100" value="10">
     </label>
   </div>
   <canvas id="canvas"></canvas>
@@ -52,15 +52,15 @@
     const BOUNCE = 0.2;
     const NOTE_DURATION_MS = 250;
 
-    const noteNames = [
-      "C4", "D4", "E4", "F4",
-      "G4", "A4", "B4", "C5",
-      "D5", "E5", "F5", "G5"
-    ];
     const notes = [
       261.63, 293.66, 329.63, 349.23,
       392.00, 440.00, 493.88, 523.25,
       587.33, 659.25, 698.46, 783.99
+    ];
+
+    const noteNames = [
+      "C", "D", "E", "F", "G", "A", "B", "C5",
+      "D5", "E5", "F5", "G5"
     ];
 
     let playheadX = 0;
@@ -74,6 +74,7 @@
     function ensureAudio() {
       if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     }
+
     function playTone(freq) {
       ensureAudio();
       const osc = audioCtx.createOscillator();
@@ -98,6 +99,7 @@
         this.color = `hsl(${noteIdx * 30}, 100%, 60%)`;
         this.isDragging = false;
         this.playLock = false;
+        this.highlightTimer = 0;
       }
 
       get bottom() {
@@ -115,25 +117,35 @@
       update(blocks) {
         if (!this.isDragging) {
           this.vy += GRAVITY;
-
           let nextY = this.y + this.vy;
           let nextX = this.x + this.vx;
 
           for (let other of blocks) {
             if (other === this) continue;
 
-            const collisionX = nextX < other.right && nextX + BLOCK_SIZE > other.x;
-            const falling = this.vy > 0;
-            const collisionY = nextY + BLOCK_SIZE > other.y && this.bottom <= other.y;
+            const collideX = nextX < other.x + BLOCK_SIZE && nextX + BLOCK_SIZE > other.x;
+            const collideY = nextY < other.y + BLOCK_SIZE && nextY + BLOCK_SIZE > other.y;
 
-            if (falling && collisionX && collisionY) {
-              this.vy = 0;
-              this.y = other.y - BLOCK_SIZE;
-              break;
+            if (collideX && collideY) {
+              // Resolve vertical
+              if (this.vy > 0 && this.bottom <= other.y + 10) {
+                this.vy = 0;
+                this.y = other.y - BLOCK_SIZE;
+              }
+              // Resolve horizontal
+              if (this.vx !== 0) {
+                if (this.x < other.x) {
+                  this.x = other.x - BLOCK_SIZE;
+                } else {
+                  this.x = other.x + BLOCK_SIZE;
+                }
+                this.vx = 0;
+              }
             }
           }
 
-          if (this.y + BLOCK_SIZE >= H) {
+          // Floor
+          if (this.bottom >= H) {
             this.y = H - BLOCK_SIZE;
             this.vy *= -BOUNCE;
             this.vx *= FRICTION;
@@ -141,6 +153,7 @@
             this.y += this.vy;
           }
 
+          // Wall bounce
           if (this.x <= 0 || this.x + BLOCK_SIZE >= W) {
             this.vx *= -BOUNCE;
           }
@@ -149,42 +162,36 @@
           this.vx *= 0.98;
           this.vy *= 0.98;
         }
+
+        if (this.highlightTimer > 0) this.highlightTimer--;
       }
 
       draw() {
-        const r = 12;
-        ctx.beginPath();
+        ctx.save();
+
+        // Glow if highlighted
+        if (this.highlightTimer > 0) {
+          ctx.shadowColor = "white";
+          ctx.shadowBlur = 20;
+        }
+
         ctx.fillStyle = this.color;
-        ctx.shadowColor = this.color;
-        ctx.shadowBlur = 20;
-        ctx.lineJoin = "round";
-        ctx.roundRect?.(this.x, this.y, BLOCK_SIZE, BLOCK_SIZE, r) ||
-          roundedRectFallback(ctx, this.x, this.y, BLOCK_SIZE, BLOCK_SIZE, r);
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(this.x, this.y, BLOCK_SIZE, BLOCK_SIZE, 8);
         ctx.fill();
+        ctx.stroke();
 
-        ctx.shadowBlur = 0;
-
+        // Text
         ctx.fillStyle = "#fff";
-        ctx.font = "bold 16px sans-serif";
+        ctx.font = "bold 14px sans-serif";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText(noteNames[this.noteIdx], this.x + BLOCK_SIZE / 2, this.y + BLOCK_SIZE / 2);
-      }
-    }
 
-    // Fallback for ctx.roundRect in some older browsers
-    function roundedRectFallback(ctx, x, y, w, h, r) {
-      ctx.beginPath();
-      ctx.moveTo(x + r, y);
-      ctx.lineTo(x + w - r, y);
-      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-      ctx.lineTo(x + w, y + h - r);
-      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-      ctx.lineTo(x + r, y + h);
-      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-      ctx.lineTo(x, y + r);
-      ctx.quadraticCurveTo(x, y, x + r, y);
-      ctx.closePath();
+        ctx.restore();
+      }
     }
 
     let blocks = [];
@@ -213,6 +220,7 @@
           b.vx = b.vy = 0;
           b.playLock = true;
           playTone(notes[b.noteIdx]);
+          b.highlightTimer = 10;
           break;
         }
       }
@@ -236,22 +244,25 @@
     function animate() {
       ctx.clearRect(0, 0, W, H);
 
-      ctx.strokeStyle = "#fff";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(playheadX, 0);
-      ctx.lineTo(playheadX, H);
-      ctx.stroke();
-
+      // Draw blocks
       for (let b of blocks) {
         b.update(blocks);
         b.draw();
         if (!b.playLock && b.intersectsPlayhead(playheadX)) {
           playTone(notes[b.noteIdx]);
           b.playLock = true;
+          b.highlightTimer = 10;
           setTimeout(() => b.playLock = false, NOTE_DURATION_MS);
         }
       }
+
+      // Draw playhead in front
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(playheadX, 0);
+      ctx.lineTo(playheadX, H);
+      ctx.stroke();
 
       playheadX += playSpeed;
       if (playheadX > W) playheadX = 0;
