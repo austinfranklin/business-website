@@ -17,21 +17,38 @@
       display: block;
       background: #111;
     }
-    #speedControl {
+    #controls {
       position: absolute;
       top: 10px;
       left: 10px;
       z-index: 10;
     }
+    #controls > * {
+      display: block;
+      margin-bottom: 6px;
+    }
+    button {
+      background: #222;
+      border: 1px solid #555;
+      color: white;
+      padding: 5px 10px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #333;
+    }
   </style>
 </head>
 <body>
-  <div id="speedControl">
+  <div id="controls">
     <label>
       Playhead Speed:
       <input type="range" id="speedSlider" min="1" max="100" value="10">
     </label>
+    <button id="addBlock">Add Random Block</button>
+    <button id="removeBlock">Remove Last Block</button>
   </div>
+
   <canvas id="canvas"></canvas>
 
   <script>
@@ -45,7 +62,6 @@
       H = canvas.height = window.innerHeight;
     });
 
-    const BLOCK_COUNT = 12;
     const BLOCK_SIZE = 60;
     const GRAVITY = 0.7;
     const FRICTION = 0.9;
@@ -127,12 +143,10 @@
             const collideY = nextY < other.y + BLOCK_SIZE && nextY + BLOCK_SIZE > other.y;
 
             if (collideX && collideY) {
-              // Resolve vertical
               if (this.vy > 0 && this.bottom <= other.y + 10) {
                 this.vy = 0;
                 this.y = other.y - BLOCK_SIZE;
               }
-              // Resolve horizontal
               if (this.vx !== 0) {
                 if (this.x < other.x) {
                   this.x = other.x - BLOCK_SIZE;
@@ -144,7 +158,6 @@
             }
           }
 
-          // Floor
           if (this.bottom >= H) {
             this.y = H - BLOCK_SIZE;
             this.vy *= -BOUNCE;
@@ -153,7 +166,6 @@
             this.y += this.vy;
           }
 
-          // Wall bounce
           if (this.x <= 0 || this.x + BLOCK_SIZE >= W) {
             this.vx *= -BOUNCE;
           }
@@ -168,8 +180,6 @@
 
       draw() {
         ctx.save();
-
-        // Glow if highlighted
         if (this.highlightTimer > 0) {
           ctx.shadowColor = "white";
           ctx.shadowBlur = 20;
@@ -183,7 +193,6 @@
         ctx.fill();
         ctx.stroke();
 
-        // Text
         ctx.fillStyle = "#fff";
         ctx.font = "bold 14px sans-serif";
         ctx.textAlign = "center";
@@ -197,14 +206,32 @@
     let blocks = [];
     function initBlocks() {
       blocks = [];
-      for (let i = 0; i < BLOCK_COUNT; i++) {
-        const x = (i + 1) * (W / (BLOCK_COUNT + 1)) - BLOCK_SIZE / 2;
+      for (let i = 0; i < 12; i++) {
+        const x = (i + 1) * (W / 13) - BLOCK_SIZE / 2;
         blocks.push(new Block(x, i));
       }
     }
 
-    let dragTarget = null;
-    let dragOffset = { x: 0, y: 0 };
+    function addRandomBlock(x = null, y = null) {
+      const noteIdx = Math.floor(Math.random() * notes.length);
+      const bx = x ?? Math.random() * (W - BLOCK_SIZE);
+      const block = new Block(bx, noteIdx);
+      if (y !== null) block.y = y;
+      blocks.push(block);
+    }
+
+    function removeLastBlock() {
+      blocks.pop();
+    }
+
+    document.getElementById("addBlock").addEventListener("click", () => {
+      ensureAudio();
+      addRandomBlock();
+    });
+
+    document.getElementById("removeBlock").addEventListener("click", () => {
+      removeLastBlock();
+    });
 
     canvas.addEventListener("mousedown", (e) => {
       ensureAudio();
@@ -221,9 +248,12 @@
           b.playLock = true;
           playTone(notes[b.noteIdx]);
           b.highlightTimer = 10;
-          break;
+          return;
         }
       }
+
+      // Spawn new block at click
+      addRandomBlock(mx - BLOCK_SIZE / 2, my - BLOCK_SIZE / 2);
     });
 
     canvas.addEventListener("mousemove", (e) => {
@@ -244,7 +274,6 @@
     function animate() {
       ctx.clearRect(0, 0, W, H);
 
-      // Draw blocks
       for (let b of blocks) {
         b.update(blocks);
         b.draw();
@@ -256,7 +285,6 @@
         }
       }
 
-      // Draw playhead in front
       ctx.strokeStyle = "#fff";
       ctx.lineWidth = 2;
       ctx.beginPath();
