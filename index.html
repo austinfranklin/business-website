@@ -35,6 +35,7 @@
     canvas {
       flex: 1;
       background: #111;
+      height: 25%;
       display: block;
       border-radius: 8px;
     }
@@ -208,8 +209,20 @@
         const toolbar = document.getElementById(toolbarId);
         const speedSlider = document.getElementById(speedSliderId);
 
-        let W = 0;
-        let H = 0;
+        // ✅ High-DPI and sizing fix
+        function resizeCanvas() {
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = canvas.clientWidth * dpr;
+            canvas.height = canvas.clientHeight * dpr;
+            ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform before scaling
+            ctx.scale(dpr, dpr);
+        }
+
+        resizeCanvas();
+        window.addEventListener("resize", resizeCanvas);
+
+        let W = canvas.clientWidth;
+        let H = canvas.clientHeight;
 
         const blocks = [];
         let playheadX = 0;
@@ -263,19 +276,9 @@
             }
         });
 
-        // ✅ Fix layout sync by deferring to after layout pass
-        function resizeCanvas() {
-            W = canvas.offsetWidth;
-            H = canvas.offsetHeight;
-            canvas.width = W;
-            canvas.height = H;
-        }
-
-        window.addEventListener("resize", resizeCanvas);
-
         function animate() {
-            // Always update dimensions (in case container changes)
-            resizeCanvas();
+            W = canvas.clientWidth;
+            H = canvas.clientHeight;
 
             ctx.clearRect(0, 0, W, H);
 
@@ -303,12 +306,8 @@
             requestAnimationFrame(animate);
         }
 
-        // ✅ Delay the first resize until layout is done
-        requestAnimationFrame(() => {
-            resizeCanvas(); // correct dimensions
-            animate(); // start animation only after resize
-        });
-        }
+        animate();
+    }
 
     setupTrack("canvas1", "toolbar1", "speedSlider1");
     setupTrack("canvas2", "toolbar2", "speedSlider2");
