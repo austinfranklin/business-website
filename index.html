@@ -6,36 +6,47 @@
   <title>Stackable Music Blocks</title>
   <style>
     html, body {
-      margin: 0;
-      padding: 0;
-      background: #111;
-      overflow: hidden;
-      font-family: sans-serif;
-      color: white;
+        margin: 0;
+        padding: 0;
+        background: #111;
+        overflow: hidden;
+        font-family: sans-serif;
+        color: white;
     }
     canvas {
-      display: block;
-      background: #111;
+        display: block;
+        background: #111;
     }
     #controls {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      z-index: 10;
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        z-index: 10;
     }
     #controls > * {
-      display: block;
-      margin-bottom: 6px;
+        display: block;
+        margin-bottom: 6px;
+    }
+    .note-buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 6px;
+    }
+
+    .note-buttons button {
+        flex: 1 1 60px;
+        text-align: center;
     }
     button {
-      background: #222;
-      border: 1px solid #555;
-      color: white;
-      padding: 5px 10px;
-      cursor: pointer;
+        background: #222;
+        border: 1px solid #555;
+        color: white;
+        padding: 5px 10px;
+        cursor: pointer;
     }
     button:hover {
-      background: #333;
+        background: #333;
     }
   </style>
 </head>
@@ -43,10 +54,12 @@
   <div id="controls">
     <label>
       Playhead Speed:
-      <input type="range" id="speedSlider" min="1" max="100" value="10">
+      <input type="range" id="speedSlider" min="1" max="50" value="10">
     </label>
     <button id="addBlock">Add Random Block</button>
     <button id="removeBlock">Remove Last Block</button>
+    <div class="note-buttons" id="noteButtons"></div>
+    <button id="clearBlocks">Clear Blocks</button>
   </div>
 
   <canvas id="canvas"></canvas>
@@ -69,14 +82,13 @@
     const NOTE_DURATION_MS = 250;
 
     const notes = [
-      261.63, 293.66, 329.63, 349.23,
-      392.00, 440.00, 493.88, 523.25,
-      587.33, 659.25, 698.46, 783.99
+        261.63, 277.18, 293.66, 311.13, 329.63, 349.23,
+        369.99, 392.00, 415.30, 440.00, 466.16, 493.88
     ];
 
     const noteNames = [
-      "C", "D", "E", "F", "G", "A", "B", "C5",
-      "D5", "E5", "F5", "G5"
+        "C", "C#", "D", "D#", "E", "F",
+        "F#", "G", "G#", "A", "A#", "B"
     ];
 
     let playheadX = 0;
@@ -231,6 +243,25 @@
 
     document.getElementById("removeBlock").addEventListener("click", () => {
       removeLastBlock();
+    });
+
+    // Create buttons for each pitch
+    const noteButtonsContainer = document.getElementById("noteButtons");
+
+    noteNames.forEach((name, idx) => {
+    const btn = document.createElement("button");
+    btn.textContent = name;
+    btn.addEventListener("click", () => {
+        ensureAudio();
+        const x = Math.random() * (W - BLOCK_SIZE);
+        blocks.push(new Block(x, idx));
+        playTone(notes[idx]);
+    });
+    noteButtonsContainer.appendChild(btn);
+    });
+
+    document.getElementById("clearBlocks").addEventListener("click", () => {
+    blocks = [];
     });
 
     canvas.addEventListener("mousedown", (e) => {
