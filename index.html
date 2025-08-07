@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Chromatic Musical Blocks - Enhanced</title>
+<title>Chromatic Musical Blocks - Natural Physics</title>
 <style>
   body {
     margin: 0;
@@ -33,7 +33,7 @@
 <div class="instructions">Drag and throw blocks to make music</div>
 
 <script>
-// Enhanced note configuration with more octaves
+// Note configuration
 const NOTES = [
   'C3', 'C#3', 'D3', 'D#3', 'E3', 'F3',
   'F#3', 'G3', 'G#3', 'A3', 'A#3', 'B3',
@@ -41,7 +41,7 @@ const NOTES = [
   'F#4', 'G4', 'G#4', 'A4', 'A#4', 'B4'
 ];
 
-// More vibrant colors with better distribution
+// Colors for blocks
 const COLORS = [
   '#FF4136', '#FF851B', '#FFDC00', '#2ECC40', '#39CCCC', '#0074D9',
   '#B10DC9', '#85144b', '#3D9970', '#7FDBFF', '#FF6347', '#FF4500',
@@ -49,7 +49,7 @@ const COLORS = [
   '#B10DC9', '#85144b', '#3D9970', '#7FDBFF', '#FF6347', '#FF4500'
 ];
 
-// Expanded frequency range
+// Frequency mapping
 const NOTE_FREQS = {
   'C3': 130.81, 'C#3': 138.59, 'D3': 146.83, 'D#3': 155.56,
   'E3': 164.81, 'F3': 174.61, 'F#3': 185.00, 'G3': 196.00,
@@ -66,10 +66,11 @@ let H = window.innerHeight;
 canvas.width = W;
 canvas.height = H;
 
-// Physics constants
-const GRAVITY = 0.5;
-const FRICTION = 0.98;
-const BOUNCE = 0.6;
+// Physics constants - tuned for natural movement
+const GRAVITY = 0.2;            // Reduced gravity
+const FRICTION = 0.95;           // Increased friction
+const BOUNCE = 0.4;              // Reduced bounciness
+const AIR_RESISTANCE = 0.99;     // Air resistance
 const BLOCK_SIZE = Math.min(60, W / 12);
 const blocks = [];
 const activePairs = new Map();
@@ -105,7 +106,9 @@ class Block {
     this.glowIntensity = 0;
     this.collisionCount = 0;
     this.rotation = Math.random() * Math.PI * 2;
-    this.rotationSpeed = (Math.random() - 0.5) * 0.1;
+    this.rotationSpeed = (Math.random() - 0.5) * 0.02; // Slower rotation
+    this.onGround = false;
+    this.lastY = this.y;
   }
 
   draw() {
@@ -121,7 +124,7 @@ class Block {
     ctx.shadowColor = this.color;
     ctx.shadowBlur = glowSize;
     
-    // Rounded rectangle with enhanced styling
+    // Rounded rectangle
     const radius = 12;
     const gradient = ctx.createLinearGradient(-this.width/2, -this.height/2, this.width/2, this.height/2);
     gradient.addColorStop(0, this.color);
@@ -148,7 +151,7 @@ class Block {
       ctx.stroke();
     }
     
-    // Text with better contrast
+    // Text
     ctx.shadowBlur = 0;
     ctx.fillStyle = '#fff';
     ctx.font = "bold " + Math.max(14, BLOCK_SIZE/3) + "px 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif";
@@ -161,16 +164,29 @@ class Block {
   }
 
   update(deltaTime) {
-    // Update rotation
-    if (!this.isDragging) {
+    this.lastY = this.y;
+    
+    // Update rotation (only when not on ground or moving significantly)
+    if (!this.onGround || Math.abs(this.vx) > 0.5 || Math.abs(this.vy) > 0.5) {
       this.rotation += this.rotationSpeed;
-      
+    } else {
+      // When on ground, gradually settle to nearest right angle
+      const targetRotation = Math.round(this.rotation / (Math.PI/2)) * (Math.PI/2);
+      this.rotation += (targetRotation - this.rotation) * 0.1;
+      this.rotationSpeed *= 0.9; // Slow down rotation speed
+    }
+    
+    if (!this.isDragging) {
       // Apply throw velocity with friction
       this.vx += this.throwVelocity.x;
       this.vy += this.throwVelocity.y;
 
       // Gravity
       this.vy += GRAVITY;
+
+      // Air resistance
+      this.vx *= AIR_RESISTANCE;
+      this.vy *= AIR_RESISTANCE;
 
       // Friction slows down throw velocity gradually
       this.throwVelocity.x *= FRICTION;
@@ -179,6 +195,9 @@ class Block {
       // Update position
       this.x += this.vx;
       this.y += this.vy;
+
+      // Check if block is on ground
+      this.onGround = this.y + this.height >= H;
 
       // Boundaries with bounce
       if (this.x < 0) {
@@ -194,12 +213,21 @@ class Block {
         this.playNote();
       }
 
-      // Floor collision
+      // Floor collision with more natural response
       if (this.y + this.height > H) {
         this.y = H - this.height;
         this.vy = -this.vy * BOUNCE;
         this.throwVelocity.y = -this.throwVelocity.y * BOUNCE;
-        if (Math.abs(this.vy) > 1) this.playNote();
+        
+        // Only play note if significant impact
+        if (Math.abs(this.vy) > 2) {
+          this.playNote();
+        }
+        
+        // Stop rotation when hitting ground
+        if (Math.abs(this.vy) > 1) {
+          this.rotationSpeed *= 0.5;
+        }
       }
 
       // Stack collision
@@ -278,6 +306,10 @@ class Block {
       this.throwVelocity.y -= impulseY * 0.5;
       other.throwVelocity.x += impulseX * 0.5;
       other.throwVelocity.y += impulseY * 0.5;
+      
+      // Reduce rotation speed on collision
+      this.rotationSpeed *= 0.8;
+      other.rotationSpeed *= 0.8;
     }
   }
 
@@ -495,10 +527,10 @@ function enableDragging() {
     if (!draggingBlock) return;
     const now = performance.now();
     
-    // Calculate velocity for throwing
+    // Calculate velocity for throwing (reduced multiplier for slower throws)
     const dt = (now - draggingBlock.lastMouseTime) / 1000 || 0.016;
-    draggingBlock.throwVelocity.x = (mx - draggingBlock.lastMousePos.x) / dt * 0.5;
-    draggingBlock.throwVelocity.y = (my - draggingBlock.lastMousePos.y) / dt * 0.5;
+    draggingBlock.throwVelocity.x = (mx - draggingBlock.lastMousePos.x) / dt * 0.3;
+    draggingBlock.throwVelocity.y = (my - draggingBlock.lastMousePos.y) / dt * 0.3;
     
     draggingBlock.x = mx - draggingBlock.dragOffset.x;
     draggingBlock.y = my - draggingBlock.dragOffset.y;
