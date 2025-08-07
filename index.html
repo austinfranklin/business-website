@@ -2,58 +2,157 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Musical Block</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Musical Blocks</title>
   <style>
     body {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
       margin: 0;
-      background: #f0f0f0;
+      height: 100vh;
+      background: #f9f9f9;
+      overflow: hidden;
+      position: relative;
       font-family: sans-serif;
     }
+
     .block {
-      width: 200px;
-      height: 200px;
-      background: #ff6f61;
-      border-radius: 12px;
-      display: flex;
-      justify-content: center;
-      align-items: center;
+      width: 80px;
+      height: 80px;
+      border-radius: 10px;
+      position: absolute;
+      text-align: center;
+      line-height: 80px;
+      font-weight: bold;
       color: white;
-      font-size: 1.5em;
-      cursor: pointer;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-      transition: transform 0.1s ease-in-out;
+      cursor: grab;
+      user-select: none;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      transition: transform 0.2s;
     }
+
     .block:active {
-      transform: scale(0.95);
+      cursor: grabbing;
     }
   </style>
 </head>
 <body>
-  <div class="block" onclick="playNote()">🎵 Click Me</div>
+
+  <!-- Musical blocks -->
+  <div class="block" data-note="C4" style="left: 50px; top: 50px; background:#e74c3c">C</div>
+  <div class="block" data-note="D4" style="left: 150px; top: 50px; background:#e67e22">D</div>
+  <div class="block" data-note="E4" style="left: 250px; top: 50px; background:#f1c40f">E</div>
+  <div class="block" data-note="F4" style="left: 350px; top: 50px; background:#2ecc71">F</div>
+  <div class="block" data-note="G4" style="left: 450px; top: 50px; background:#3498db">G</div>
+  <div class="block" data-note="A4" style="left: 550px; top: 50px; background:#9b59b6">A</div>
+  <div class="block" data-note="B4" style="left: 650px; top: 50px; background:#34495e">B</div>
 
   <script>
-    function playNote() {
-      const AudioContext = window.AudioContext || window.webkitAudioContext;
-      const audioCtx = new AudioContext();
+    const blocks = Array.from(document.querySelectorAll('.block'));
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const activePairs = new Map(); // key: id, value: [osc1, osc2]
 
-      const oscillator = audioCtx.createOscillator();
-      const gainNode = audioCtx.createGain();
-
-      oscillator.type = 'sine';
-      oscillator.frequency.setValueAtTime(440, audioCtx.currentTime); // A4
-      gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
-
-      oscillator.connect(gainNode);
-      gainNode.connect(audioCtx.destination);
-
-      oscillator.start();
-      oscillator.stop(audioCtx.currentTime + 0.5); // half-second note
+    function getFrequency(note) {
+      const noteFreq = {
+        'C4': 261.63,
+        'D4': 293.66,
+        'E4': 329.63,
+        'F4': 349.23,
+        'G4': 392.00,
+        'A4': 440.00,
+        'B4': 493.88
+      };
+      return noteFreq[note];
     }
+
+    function playPair(id, note1, note2) {
+      if (activePairs.has(id)) return;
+
+      const freq1 = getFrequency(note1);
+      const freq2 = getFrequency(note2);
+
+      const osc1 = audioCtx.createOscillator();
+      const osc2 = audioCtx.createOscillator();
+
+      osc1.frequency.value = freq1;
+      osc2.frequency.value = freq2;
+
+      osc1.type = 'sine';
+      osc2.type = 'sine';
+
+      const gain = audioCtx.createGain();
+      gain.gain.value = 0.1;
+
+      osc1.connect(gain);
+      osc2.connect(gain);
+      gain.connect(audioCtx.destination);
+
+      osc1.start();
+      osc2.start();
+
+      activePairs.set(id, {osc1, osc2});
+    }
+
+    function stopPair(id) {
+      const pair = activePairs.get(id);
+      if (pair) {
+        pair.osc1.stop();
+        pair.osc2.stop();
+        activePairs.delete(id);
+      }
+    }
+
+    function areTouching(a, b) {
+      const r1 = a.getBoundingClientRect();
+      const r2 = b.getBoundingClientRect();
+
+      return !(
+        r1.right < r2.left ||
+        r1.left > r2.right ||
+        r1.bottom < r2.top ||
+        r1.top > r2.bottom
+      );
+    }
+
+    function updateCollisions() {
+      for (let i = 0; i < blocks.length; i++) {
+        for (let j = i + 1; j < blocks.length; j++) {
+          const a = blocks[i];
+          const b = blocks[j];
+          const id = a.dataset.note + '-' + b.dataset.note;
+
+          if (areTouching(a, b)) {
+            playPair(id, a.dataset.note, b.dataset.note);
+          } else {
+            stopPair(id);
+          }
+        }
+      }
+    }
+
+    blocks.forEach(block => {
+      let offsetX = 0;
+      let offsetY = 0;
+      let isDragging = false;
+
+      block.addEventListener('mousedown', e => {
+        isDragging = true;
+        offsetX = e.clientX - block.offsetLeft;
+        offsetY = e.clientY - block.offsetTop;
+        block.style.zIndex = 1000; // bring to front
+      });
+
+      window.addEventListener('mousemove', e => {
+        if (isDragging) {
+          block.style.left = `${e.clientX - offsetX}px`;
+          block.style.top = `${e.clientY - offsetY}px`;
+          updateCollisions();
+        }
+      });
+
+      window.addEventListener('mouseup', () => {
+        isDragging = false;
+        block.style.zIndex = '';
+      });
+    });
   </script>
 </body>
 </html>
