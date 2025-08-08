@@ -2,169 +2,185 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Oscilloscope Drawing Synth</title>
+<title>Draw Your Own Oscillator</title>
 <style>
   body {
-    font-family: sans-serif;
     background: #111;
-    color: #fff;
+    color: white;
+    font-family: sans-serif;
     text-align: center;
-    padding: 2rem;
+    margin: 0;
+    padding: 0;
   }
-  h1 {
-    color: #0ff;
-  }
-  canvas {
-    background: #000;
-    border: 2px solid #0ff;
-    border-radius: 5px;
+  #drawCanvas {
+    border: 2px solid #555;
     display: block;
-    margin: 1rem auto;
+    margin: 20px auto;
+    background: black;
     touch-action: none;
   }
   button {
-    background: transparent;
-    border: 1px solid #0ff;
-    color: #0ff;
-    padding: 0.5rem 1rem;
-    margin: 0.5rem;
-    font-size: 1rem;
-    border-radius: 5px;
+    background: #333;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    margin: 5px;
+    font-size: 16px;
     cursor: pointer;
-    transition: background 0.3s, color 0.3s;
+    border-radius: 4px;
   }
   button:hover {
-    background: #0ff;
-    color: #111;
+    background: #555;
   }
 </style>
 </head>
 <body>
 
-<h1>Oscilloscope Drawing Synth</h1>
-<canvas id="drawCanvas" width="512" height="512"></canvas>
-<div>
-  <button id="playBtn">Play</button>
-  <button id="stopBtn">Stop</button>
-  <button id="clearBtn">Clear</button>
-</div>
+<h1>Draw Your Waveform</h1>
+<canvas id="drawCanvas" width="800" height="200"></canvas><br>
+<button id="clearBtn">Clear</button>
+<button id="playBtn">Play</button>
+<button id="stopBtn">Stop</button>
 
 <script>
-(() => {
-  const canvas = document.getElementById('drawCanvas');
-  const ctx = canvas.getContext('2d');
-  let drawing = false;
-  let points = [];
-  let audioCtx = null;
-  let bufferSource = null;
+const canvas = document.getElementById("drawCanvas");
+const ctx = canvas.getContext("2d");
+let drawing = false;
+let points = []; // store all drawn points
+let audioCtx, osc, gainNode;
 
-  // Draw only the new segment
-  function drawLineSegment(p1, p2) {
-    ctx.strokeStyle = "#0ff";
-    ctx.beginPath();
-    ctx.moveTo(p1.x, p1.y);
-    ctx.lineTo(p2.x, p2.y);
-    ctx.stroke();
-  }
-
-  function startDrawing(e) {
-    drawing = true;
-    addPoint(e);
-  }
-
-  function drawMove(e) {
-    if (!drawing) return;
-    const prev = points[points.length - 1];
-    const newPt = addPoint(e);
-    drawLineSegment(prev, newPt);
-  }
-
-  function stopDrawing() {
-    drawing = false;
-  }
-
-  function addPoint(e) {
-    const rect = canvas.getBoundingClientRect();
-    const clientX = e.clientX !== undefined ? e.clientX : e.touches[0].clientX;
-    const clientY = e.clientY !== undefined ? e.clientY : e.touches[0].clientY;
-    const x = clientX - rect.left;
-    const y = clientY - rect.top;
-    const pt = { x, y };
-    points.push(pt);
-    return pt;
-  }
-
-  function playDrawing() {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    stopDrawingPlayback();
-
-    if (points.length < 2) return;
-
-    const sampleCount = 44100; // 1 sec
-    const leftData = new Float32Array(sampleCount);
-    const rightData = new Float32Array(sampleCount);
-
-    for (let i = 0; i < sampleCount; i++) {
-      const t = i / sampleCount;
-      const idx = Math.floor(t * (points.length - 1));
-      const p = points[idx];
-      leftData[i] = (p.x / canvas.width) * 2 - 1;  // X -> Left
-      rightData[i] = (p.y / canvas.height) * 2 - 1; // Y -> Right
-    }
-
-    // Apply short fade-in/fade-out envelope to avoid click
-    const fadeSamples = Math.floor(sampleCount * 0.01); // ~10 ms at 44.1kHz
-    for (let i = 0; i < fadeSamples; i++) {
-      const fadeInGain = i / fadeSamples;
-      const fadeOutGain = (fadeSamples - i) / fadeSamples;
-      leftData[i] *= fadeInGain;
-      rightData[i] *= fadeInGain;
-      leftData[sampleCount - 1 - i] *= fadeOutGain;
-      rightData[sampleCount - 1 - i] *= fadeOutGain;
-    }
-
-    const buffer = audioCtx.createBuffer(2, sampleCount, audioCtx.sampleRate);
-    buffer.copyToChannel(leftData, 0);
-    buffer.copyToChannel(rightData, 1);
-
-    bufferSource = audioCtx.createBufferSource();
-    bufferSource.buffer = buffer;
-    bufferSource.loop = true;
-    bufferSource.connect(audioCtx.destination);
-    bufferSource.start();
-  }
-
-  function stopDrawingPlayback() {
-    if (bufferSource) {
-      bufferSource.stop();
-      bufferSource.disconnect();
-      bufferSource = null;
+// Draw stored waveform
+function redraw() {
+  ctx.fillStyle = "black";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = "lime";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  for (let i = 0; i < points.length; i++) {
+    const [x, y] = points[i];
+    if (i === 0) {
+      ctx.moveTo(x, y);
+    } else {
+      ctx.lineTo(x, y);
     }
   }
+  ctx.stroke();
+}
 
-  function clearDrawing() {
-    points = [];
-    ctx.fillStyle = "#000";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+function getMousePos(e) {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: e.clientX - rect.left,
+    y: e.clientY - rect.top
+  };
+}
+
+function getTouchPos(e) {
+  const rect = canvas.getBoundingClientRect();
+  const touch = e.touches[0];
+  return {
+    x: touch.clientX - rect.left,
+    y: touch.clientY - rect.top
+  };
+}
+
+// Mouse/touch events
+canvas.addEventListener("mousedown", e => {
+  drawing = true;
+  const pos = getMousePos(e);
+  points.push([pos.x, pos.y]);
+  redraw();
+});
+canvas.addEventListener("mousemove", e => {
+  if (!drawing) return;
+  const pos = getMousePos(e);
+  points.push([pos.x, pos.y]);
+  redraw();
+});
+canvas.addEventListener("mouseup", () => drawing = false);
+canvas.addEventListener("mouseleave", () => drawing = false);
+
+canvas.addEventListener("touchstart", e => {
+  e.preventDefault();
+  drawing = true;
+  const pos = getTouchPos(e);
+  points.push([pos.x, pos.y]);
+  redraw();
+});
+canvas.addEventListener("touchmove", e => {
+  e.preventDefault();
+  if (!drawing) return;
+  const pos = getTouchPos(e);
+  points.push([pos.x, pos.y]);
+  redraw();
+});
+canvas.addEventListener("touchend", () => drawing = false);
+
+// Clear
+document.getElementById("clearBtn").addEventListener("click", () => {
+  points = [];
+  redraw();
+});
+
+// Convert drawing to waveform and play
+document.getElementById("playBtn").addEventListener("click", () => {
+  if (points.length < 2) return;
+
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+  // Resample drawing into a Float32Array
+  const tableSize = 2048;
+  const waveform = new Float32Array(tableSize);
+  for (let i = 0; i < tableSize; i++) {
+    const t = i / (tableSize - 1);
+    const xPos = t * (canvas.width - 1);
+    // find nearest point in drawn data
+    let closest = points.reduce((a, b) => {
+      return Math.abs(b[0] - xPos) < Math.abs(a[0] - xPos) ? b : a;
+    });
+    const normY = 1 - (closest[1] / canvas.height); // 0..1
+    waveform[i] = (normY - 0.5) * 2; // -1..1
   }
 
-  // Mouse + touch events
-  canvas.addEventListener('mousedown', startDrawing);
-  canvas.addEventListener('mousemove', drawMove);
-  window.addEventListener('mouseup', stopDrawing);
+  // Apply crossfade at loop boundaries (50 samples)
+  const fadeLen = 50;
+  for (let i = 0; i < fadeLen; i++) {
+    const fadeIn = i / fadeLen;
+    const fadeOut = 1 - fadeIn;
+    const startVal = waveform[i];
+    const endVal = waveform[tableSize - fadeLen + i];
+    const avg = startVal * fadeIn + endVal * fadeOut;
+    waveform[i] = avg;
+    waveform[tableSize - fadeLen + i] = avg;
+  }
 
-  canvas.addEventListener('touchstart', startDrawing);
-  canvas.addEventListener('touchmove', drawMove);
-  window.addEventListener('touchend', stopDrawing);
+  // Create periodic wave
+  const periodicWave = audioCtx.createPeriodicWave(waveform, new Float32Array(tableSize), { disableNormalization: true });
 
-  document.getElementById('playBtn').addEventListener('click', playDrawing);
-  document.getElementById('stopBtn').addEventListener('click', stopDrawingPlayback);
-  document.getElementById('clearBtn').addEventListener('click', clearDrawing);
+  // Create oscillator and gain envelope
+  osc = audioCtx.createOscillator();
+  gainNode = audioCtx.createGain();
+  osc.setPeriodicWave(periodicWave);
+  gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+  gainNode.gain.linearRampToValueAtTime(0.8, audioCtx.currentTime + 0.02); // short fade-in
+  gainNode.gain.linearRampToValueAtTime(0.8, audioCtx.currentTime + 1e6); // hold level
 
-  // Initial fill
-  clearDrawing();
-})();
+  osc.connect(gainNode).connect(audioCtx.destination);
+  osc.start();
+});
+
+// Stop
+document.getElementById("stopBtn").addEventListener("click", () => {
+  if (osc) {
+    gainNode.gain.cancelScheduledValues(audioCtx.currentTime);
+    gainNode.gain.setValueAtTime(gainNode.gain.value, audioCtx.currentTime);
+    gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.02); // fade out
+    osc.stop(audioCtx.currentTime + 0.03);
+    osc = null;
+  }
+});
+
+redraw();
 </script>
 
 </body>
