@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Draw Wavetable Synth</title>
+<title>Oscilloscope Drawing Synth</title>
 <style>
   body {
     font-family: sans-serif;
@@ -16,7 +16,7 @@
     color: #0ff;
   }
   canvas {
-    background: #222;
+    background: #000;
     border: 2px solid #0ff;
     border-radius: 5px;
     display: block;
@@ -42,8 +42,8 @@
 </head>
 <body>
 
-<h1>Draw Your Own Wavetable</h1>
-<canvas id="waveCanvas" width="512" height="200"></canvas>
+<h1>Oscilloscope Drawing Synth</h1>
+<canvas id="drawCanvas" width="512" height="512"></canvas>
 <div>
   <button id="playBtn">Play</button>
   <button id="stopBtn">Stop</button>
@@ -52,115 +52,111 @@
 
 <script>
 (() => {
-  const canvas = document.getElementById('waveCanvas');
+  const canvas = document.getElementById('drawCanvas');
   const ctx = canvas.getContext('2d');
-
   let drawing = false;
-  let waveData = new Array(canvas.width).fill(0);
+  let points = [];
   let audioCtx = null;
-  let oscillator = null;
+  let bufferSource = null;
 
-  function drawWaveform() {
-    ctx.fillStyle = "#222";
+  function drawCanvas() {
+    ctx.fillStyle = "#000";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    ctx.strokeStyle = "#0ff";
-    ctx.beginPath();
-    ctx.moveTo(0, canvas.height / 2);
-    for (let x = 0; x < canvas.width; x++) {
-      const y = (1 - waveData[x]) * (canvas.height / 2);
-      ctx.lineTo(x, y);
-    }
-    ctx.stroke();
-  }
-
-  function updateWaveData(x, y) {
-    const normY = 1 - (y / canvas.height) * 2; // -1 to 1
-    if (x >= 0 && x < waveData.length) {
-      waveData[x] = Math.max(-1, Math.min(1, normY));
+    if (points.length > 1) {
+      ctx.strokeStyle = "#0ff";
+      ctx.beginPath();
+      ctx.moveTo(points[0].x, points[0].y);
+      for (let i = 1; i < points.length; i++) {
+        ctx.lineTo(points[i].x, points[i].y);
+      }
+      ctx.stroke();
     }
   }
 
   function startDrawing(e) {
     drawing = true;
-    const rect = canvas.getBoundingClientRect();
-    const x = Math.floor((e.clientX || e.touches[0].clientX) - rect.left);
-    const y = (e.clientY || e.touches[0].clientY) - rect.top;
-    updateWaveData(x, y);
-    drawWaveform();
+    points = [];
+    addPoint(e);
+    drawCanvas();
   }
 
   function drawMove(e) {
     if (!drawing) return;
-    const rect = canvas.getBoundingClientRect();
-    const x = Math.floor((e.clientX || e.touches[0].clientX) - rect.left);
-    const y = (e.clientY || e.touches[0].clientY) - rect.top;
-    updateWaveData(x, y);
-    drawWaveform();
+    addPoint(e);
+    drawCanvas();
   }
 
   function stopDrawing() {
     drawing = false;
   }
 
-  function createPeriodicWave() {
+  function addPoint(e) {
+    const rect = canvas.getBoundingClientRect();
+    const clientX = e.clientX !== undefined ? e.clientX : e.touches[0].clientX;
+    const clientY = e.clientY !== undefined ? e.clientY : e.touches[0].clientY;
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+    points.push({ x, y });
+  }
+
+  function playDrawing() {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    stopDrawingPlayback();
 
-    // Convert pixel data to Float32Array
-    const samples = 256; // resolution of the wavetable
-    const real = new Float32Array(samples);
-    const imag = new Float32Array(samples);
+    if (points.length < 2) return;
 
-    // Fill wavetable using waveData
-    for (let i = 0; i < samples; i++) {
-      const idx = Math.floor((i / samples) * waveData.length);
-      real[i] = waveData[idx];
-      imag[i] = 0; // pure waveform from drawn data
+    // Convert drawing into normalized audio data
+    const sampleCount = 44100; // 1 sec
+    const leftData = new Float32Array(sampleCount);
+    const rightData = new Float32Array(sampleCount);
+
+    for (let i = 0; i < sampleCount; i++) {
+      const t = i / sampleCount;
+      const idx = Math.floor(t * (points.length - 1));
+      const p = points[idx];
+      // Normalize to [-1, 1] based on canvas size
+      leftData[i] = (p.x / canvas.width) * 2 - 1;  // X -> Left
+      rightData[i] = (p.y / canvas.height) * 2 - 1; // Y -> Right
     }
 
-    return audioCtx.createPeriodicWave(real, imag, { disableNormalization: true });
+    const buffer = audioCtx.createBuffer(2, sampleCount, audioCtx.sampleRate);
+    buffer.copyToChannel(leftData, 0);
+    buffer.copyToChannel(rightData, 1);
+
+    bufferSource = audioCtx.createBufferSource();
+    bufferSource.buffer = buffer;
+    bufferSource.loop = true;
+    bufferSource.connect(audioCtx.destination);
+    bufferSource.start();
   }
 
-  function playWave() {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    stopWave(); // stop any previous osc
-
-    oscillator = audioCtx.createOscillator();
-    oscillator.setPeriodicWave(createPeriodicWave());
-    oscillator.frequency.value = 220; // default pitch
-    oscillator.connect(audioCtx.destination);
-    oscillator.start();
-  }
-
-  function stopWave() {
-    if (oscillator) {
-      oscillator.stop();
-      oscillator.disconnect();
-      oscillator = null;
+  function stopDrawingPlayback() {
+    if (bufferSource) {
+      bufferSource.stop();
+      bufferSource.disconnect();
+      bufferSource = null;
     }
   }
 
-  function clearWave() {
-    waveData.fill(0);
-    drawWaveform();
+  function clearDrawing() {
+    points = [];
+    drawCanvas();
   }
 
-  // Event listeners
+  // Mouse + touch events
   canvas.addEventListener('mousedown', startDrawing);
-  canvas.addEventListener('touchstart', startDrawing);
-
   canvas.addEventListener('mousemove', drawMove);
-  canvas.addEventListener('touchmove', drawMove);
-
   window.addEventListener('mouseup', stopDrawing);
+
+  canvas.addEventListener('touchstart', startDrawing);
+  canvas.addEventListener('touchmove', drawMove);
   window.addEventListener('touchend', stopDrawing);
 
-  document.getElementById('playBtn').addEventListener('click', playWave);
-  document.getElementById('stopBtn').addEventListener('click', stopWave);
-  document.getElementById('clearBtn').addEventListener('click', clearWave);
+  document.getElementById('playBtn').addEventListener('click', playDrawing);
+  document.getElementById('stopBtn').addEventListener('click', stopDrawingPlayback);
+  document.getElementById('clearBtn').addEventListener('click', clearDrawing);
 
-  // Initial draw
-  drawWaveform();
+  drawCanvas();
 })();
 </script>
 
