@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Rotating Box Music</title>
+<style>
+  body {
+    background: #111;
+    color: white;
+    text-align: center;
+    font-family: sans-serif;
+    margin: 0;
+  }
+  canvas {
+    display: block;
+    margin: 0 auto;
+    background: #000;
+    border: 2px solid #3399ff;
+  }
+</style>
+</head>
+<body>
+<h1>Rotating Box with Musical Balls</h1>
+<p>Use ⬅️ and ➡️ to rotate the box</p>
+<canvas id="gameCanvas" width="600" height="600"></canvas>
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+const W = canvas.width;
+const H = canvas.height;
+
+let audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+// Ball data
+const balls = [
+  {x: 0, y: 0, vx: 120, vy: 80, r: 12, color: "red",    freq: 261.63}, // C4
+  {x: 0, y: 0, vx: -100, vy: 90, r: 12, color: "green", freq: 329.63}, // E4
+  {x: 0, y: 0, vx: 140, vy: -100, r: 12, color: "blue", freq: 392.00}, // G4
+  {x: 0, y: 0, vx: -80, vy: -120, r: 12, color: "yellow", freq: 523.25} // C5
+];
+
+// Center the balls
+balls.forEach(b => {
+  b.x = 0;
+  b.y = 0;
+});
+
+let boxSize = 400;
+let angle = 0;
+let lastTime = performance.now();
+
+// Play short sine note
+function playNote(freq) {
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = "sine";
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.15);
+  osc.connect(gain).connect(audioCtx.destination);
+  osc.start();
+  osc.stop(audioCtx.currentTime + 0.15);
+}
+
+// Rotate vector by angle
+function rotate(x, y, a) {
+  return {
+    x: x * Math.cos(a) - y * Math.sin(a),
+    y: x * Math.sin(a) + y * Math.cos(a)
+  };
+}
+
+// Main update loop
+function update(dt) {
+  const half = boxSize / 2;
+
+  balls.forEach(b => {
+    b.x += b.vx * dt;
+    b.y += b.vy * dt;
+
+    // Check collisions in rotated frame
+    const posRot = rotate(b.x, b.y, -angle);
+    let collided = false;
+    if (posRot.x + b.r > half) { posRot.x = half - b.r; b.vx = -b.vx; collided = true; }
+    if (posRot.x - b.r < -half) { posRot.x = -half + b.r; b.vx = -b.vx; collided = true; }
+    if (posRot.y + b.r > half) { posRot.y = half - b.r; b.vy = -b.vy; collided = true; }
+    if (posRot.y - b.r < -half) { posRot.y = -half + b.r; b.vy = -b.vy; collided = true; }
+
+    if (collided) {
+      // Rotate corrected position back
+      const corrected = rotate(posRot.x, posRot.y, angle);
+      b.x = corrected.x;
+      b.y = corrected.y;
+      playNote(b.freq);
+    }
+  });
+}
+
+// Draw box and balls
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+  ctx.save();
+  ctx.translate(W/2, H/2);
+  ctx.rotate(angle);
+
+  // Draw box
+  ctx.strokeStyle = "#3399ff";
+  ctx.lineWidth = 4;
+  ctx.strokeRect(-boxSize/2, -boxSize/2, boxSize, boxSize);
+
+  ctx.restore();
+
+  // Draw balls
+  balls.forEach(b => {
+    const screenPos = rotate(b.x, b.y, angle);
+    ctx.beginPath();
+    ctx.arc(W/2 + screenPos.x, H/2 + screenPos.y, b.r, 0, Math.PI * 2);
+    ctx.fillStyle = b.color;
+    ctx.fill();
+  });
+}
+
+// Game loop
+function loop(time) {
+  const dt = (time - lastTime) / 1000;
+  lastTime = time;
+  update(dt);
+  draw();
+  requestAnimationFrame(loop);
+}
+
+// Controls
+window.addEventListener("keydown", e => {
+  if (e.key === "ArrowLeft") angle -= 0.05;
+  if (e.key === "ArrowRight") angle += 0.05;
+});
+
+loop(lastTime);
+</script>
+</body>
+</html>
