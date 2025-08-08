@@ -59,31 +59,25 @@
   let audioCtx = null;
   let bufferSource = null;
 
-  function drawCanvas() {
-    ctx.fillStyle = "#000";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    if (points.length > 1) {
-      ctx.strokeStyle = "#0ff";
-      ctx.beginPath();
-      ctx.moveTo(points[0].x, points[0].y);
-      for (let i = 1; i < points.length; i++) {
-        ctx.lineTo(points[i].x, points[i].y);
-      }
-      ctx.stroke();
-    }
+  // Draw only the new segment
+  function drawLineSegment(p1, p2) {
+    ctx.strokeStyle = "#0ff";
+    ctx.beginPath();
+    ctx.moveTo(p1.x, p1.y);
+    ctx.lineTo(p2.x, p2.y);
+    ctx.stroke();
   }
 
   function startDrawing(e) {
     drawing = true;
-    points = [];
     addPoint(e);
-    drawCanvas();
   }
 
   function drawMove(e) {
     if (!drawing) return;
-    addPoint(e);
-    drawCanvas();
+    const prev = points[points.length - 1];
+    const newPt = addPoint(e);
+    drawLineSegment(prev, newPt);
   }
 
   function stopDrawing() {
@@ -96,7 +90,9 @@
     const clientY = e.clientY !== undefined ? e.clientY : e.touches[0].clientY;
     const x = clientX - rect.left;
     const y = clientY - rect.top;
-    points.push({ x, y });
+    const pt = { x, y };
+    points.push(pt);
+    return pt;
   }
 
   function playDrawing() {
@@ -105,7 +101,6 @@
 
     if (points.length < 2) return;
 
-    // Convert drawing into normalized audio data
     const sampleCount = 44100; // 1 sec
     const leftData = new Float32Array(sampleCount);
     const rightData = new Float32Array(sampleCount);
@@ -114,9 +109,19 @@
       const t = i / sampleCount;
       const idx = Math.floor(t * (points.length - 1));
       const p = points[idx];
-      // Normalize to [-1, 1] based on canvas size
       leftData[i] = (p.x / canvas.width) * 2 - 1;  // X -> Left
       rightData[i] = (p.y / canvas.height) * 2 - 1; // Y -> Right
+    }
+
+    // Apply short fade-in/fade-out envelope to avoid click
+    const fadeSamples = Math.floor(sampleCount * 0.01); // ~10 ms at 44.1kHz
+    for (let i = 0; i < fadeSamples; i++) {
+      const fadeInGain = i / fadeSamples;
+      const fadeOutGain = (fadeSamples - i) / fadeSamples;
+      leftData[i] *= fadeInGain;
+      rightData[i] *= fadeInGain;
+      leftData[sampleCount - 1 - i] *= fadeOutGain;
+      rightData[sampleCount - 1 - i] *= fadeOutGain;
     }
 
     const buffer = audioCtx.createBuffer(2, sampleCount, audioCtx.sampleRate);
@@ -140,7 +145,8 @@
 
   function clearDrawing() {
     points = [];
-    drawCanvas();
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
 
   // Mouse + touch events
@@ -156,7 +162,8 @@
   document.getElementById('stopBtn').addEventListener('click', stopDrawingPlayback);
   document.getElementById('clearBtn').addEventListener('click', clearDrawing);
 
-  drawCanvas();
+  // Initial fill
+  clearDrawing();
 })();
 </script>
 
