@@ -2,362 +2,46 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Block Music Tracks</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Sequencer Projects</title>
   <style>
     body {
-      margin: 0;
-      background: #111;
       font-family: sans-serif;
-      color: white;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 20px;
+      background: #111;
+      color: #fff;
+      padding: 2rem;
+      line-height: 1.6;
     }
-
-    .track-container {
-      border: 2px solid #444;
-      padding: 20px;
-      margin-bottom: 40px;
-      width: 90%;
-      max-width: 1000px;
-      box-sizing: border-box;
+    h1 {
+      color: #0ff;
     }
-
-    canvas.track-canvas {
-      width: 100%;
-      height: 200px;
-      display: block;
-      background: #222;
-      border: 1px solid #333;
-      margin-top: 10px;
+    ul {
+      list-style: none;
+      padding: 0;
     }
-
-    .toolbar {
-      margin-top: 10px;
+    li {
+      margin: 1rem 0;
     }
-
-    .note-button {
-      padding: 6px 10px;
-      margin: 2px;
-      border: none;
-      cursor: pointer;
+    a {
+      color: #0ff;
+      text-decoration: none;
+      padding: 0.5rem 1rem;
+      border: 1px solid #0ff;
+      border-radius: 5px;
+      transition: background 0.3s, color 0.3s;
+    }
+    a:hover {
+      background: #0ff;
       color: #111;
-      font-weight: bold;
-      border-radius: 4px;
-    }
-
-    .controls {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: space-between;
-      align-items: center;
-      margin-top: 10px;
-      gap: 12px;
-    }
-
-    .controls label {
-      margin-right: 10px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      white-space: nowrap;
-    }
-
-    select, input[type="range"] {
-      cursor: pointer;
-      margin-left: 6px;
     }
   </style>
 </head>
 <body>
-  <div id="track1" class="track-container">
-    <div class="controls">
-      <label>Track 1 Speed: <input id="speed1" type="range" min="1" max="15" value="5" /></label>
-      <label>Waveform:
-        <select id="waveform1">
-          <option value="sine" selected>Sine</option>
-          <option value="square">Square</option>
-          <option value="sawtooth">Sawtooth</option>
-          <option value="triangle">Triangle</option>
-        </select>
-      </label>
-      <label>Attack (ms):
-        <input id="attack1" type="range" min="0" max="500" value="20" />
-      </label>
-      <label>Release (ms):
-        <input id="release1" type="range" min="0" max="500" value="150" />
-      </label>
-      <button id="clear1">Clear Blocks</button>
-    </div>
-    <div class="toolbar" id="toolbar1"></div>
-    <canvas id="canvas1" class="track-canvas"></canvas>
-  </div>
-
-  <div id="track2" class="track-container">
-    <div class="controls">
-      <label>Track 2 Speed: <input id="speed2" type="range" min="1" max="15" value="5" /></label>
-      <label>Waveform:
-        <select id="waveform2">
-          <option value="sine" selected>Sine</option>
-          <option value="square">Square</option>
-          <option value="sawtooth">Sawtooth</option>
-          <option value="triangle">Triangle</option>
-        </select>
-      </label>
-      <label>Attack (ms):
-        <input id="attack2" type="range" min="0" max="500" value="20" />
-      </label>
-      <label>Release (ms):
-        <input id="release2" type="range" min="0" max="500" value="150" />
-      </label>
-      <button id="clear2">Clear Blocks</button>
-    </div>
-    <div class="toolbar" id="toolbar2"></div>
-    <canvas id="canvas2" class="track-canvas"></canvas>
-  </div>
-
-  <script>
-    const notes = [
-      { name: "C", freq: 261.63 },
-      { name: "C#", freq: 277.18 },
-      { name: "D", freq: 293.66 },
-      { name: "D#", freq: 311.13 },
-      { name: "E", freq: 329.63 },
-      { name: "F", freq: 349.23 },
-      { name: "F#", freq: 369.99 },
-      { name: "G", freq: 392.00 },
-      { name: "G#", freq: 415.30 },
-      { name: "A", freq: 440.00 },
-      { name: "A#", freq: 466.16 },
-      { name: "B", freq: 493.88 }
-    ];
-
-    const BLOCK_SIZE = 40;
-    const NOTE_DURATION_MS = 200;
-    let audioCtx = null;
-
-    function ensureAudio() {
-      if (!audioCtx) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      }
-    }
-
-    function playTone(freq, waveform, attack, release) {
-      ensureAudio();
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.type = waveform;
-      osc.frequency.value = freq;
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-
-      const now = audioCtx.currentTime;
-      const attackSec = attack / 1000;
-      const releaseSec = release / 1000;
-      const sustainTime = Math.max(0, 0.2 - attackSec - releaseSec);
-
-      gain.gain.setValueAtTime(0, now);
-      gain.gain.linearRampToValueAtTime(0.2, now + attackSec);
-      gain.gain.setValueAtTime(0.2, now + attackSec + sustainTime);
-      gain.gain.linearRampToValueAtTime(0, now + attackSec + sustainTime + releaseSec);
-
-      osc.start(now);
-      osc.stop(now + attackSec + sustainTime + releaseSec);
-    }
-
-    class Block {
-      constructor(x, y, noteIdx, synthSettings) {
-        this.x = x;
-        this.y = y;
-        this.vx = 0;
-        this.vy = 0;
-        this.noteIdx = noteIdx;
-        this.isDragging = false;
-        this.playLock = false;
-        this.glow = 0;
-
-        // synth settings per block
-        this.waveform = synthSettings.waveform;
-        this.attack = synthSettings.attack;
-        this.release = synthSettings.release;
-      }
-
-      update(blocks, H, W) {
-        if (!this.isDragging) {
-          this.vy += 0.5; // gravity
-          this.y += this.vy;
-          this.x += this.vx;
-
-          // simple ground collision
-          if (this.y + BLOCK_SIZE > H) {
-            this.y = H - BLOCK_SIZE;
-            this.vy = 0;
-          }
-
-          // simple block collisions
-          for (let other of blocks) {
-            if (other !== this && this.collidesWith(other)) {
-              const overlapY = (this.y + BLOCK_SIZE) - other.y;
-              if (overlapY > 0 && this.vy > 0) {
-                this.y -= overlapY;
-                this.vy = 0;
-              }
-            }
-          }
-        }
-
-        if (this.glow > 0) this.glow -= 0.05;
-      }
-
-      collidesWith(other) {
-        return (
-          this.x < other.x + BLOCK_SIZE &&
-          this.x + BLOCK_SIZE > other.x &&
-          this.y < other.y + BLOCK_SIZE &&
-          this.y + BLOCK_SIZE > other.y
-        );
-      }
-
-      draw(ctx) {
-        const hue = this.noteIdx * 30;
-        ctx.fillStyle = `hsl(${hue}, 100%, ${this.glow > 0 ? 80 : 60}%)`;
-        ctx.fillRect(this.x, this.y, BLOCK_SIZE, BLOCK_SIZE);
-      }
-
-      intersectsPlayhead(px) {
-        return px >= this.x && px <= this.x + BLOCK_SIZE;
-      }
-    }
-
-    function setupTrack(canvasId, toolbarId, speedSliderId, waveformId, attackId, releaseId, clearBtnId) {
-      const canvas = document.getElementById(canvasId);
-      const ctx = canvas.getContext("2d");
-      const toolbar = document.getElementById(toolbarId);
-      const speedSlider = document.getElementById(speedSliderId);
-      const waveformSelect = document.getElementById(waveformId);
-      const attackSlider = document.getElementById(attackId);
-      const releaseSlider = document.getElementById(releaseId);
-      const clearBtn = document.getElementById(clearBtnId);
-
-      const blocks = [];
-      let W, H;
-
-      function resizeCanvas() {
-        const rect = canvas.getBoundingClientRect();
-        canvas.width = rect.width;
-        canvas.height = rect.height;
-        W = rect.width;
-        H = rect.height;
-      }
-
-      resizeCanvas();
-      window.addEventListener("resize", resizeCanvas);
-
-      let playheadX = 0;
-      let playSpeed = Number(speedSlider.value);
-
-      speedSlider.addEventListener("input", (e) => playSpeed = Number(e.target.value));
-
-      // Default synth settings for this track
-      let synthSettings = {
-        waveform: waveformSelect.value,
-        attack: Number(attackSlider.value),
-        release: Number(releaseSlider.value)
-      };
-
-      waveformSelect.addEventListener("change", (e) => {
-        synthSettings.waveform = e.target.value;
-      });
-      attackSlider.addEventListener("input", (e) => {
-        synthSettings.attack = Number(e.target.value);
-      });
-      releaseSlider.addEventListener("input", (e) => {
-        synthSettings.release = Number(e.target.value);
-      });
-
-      notes.forEach((note, i) => {
-        const btn = document.createElement("button");
-        btn.className = "note-button";
-        btn.style.background = `hsl(${i * 30}, 100%, 60%)`;
-        btn.innerText = note.name;
-        btn.onclick = () => {
-          ensureAudio();
-          const x = 20 + Math.random() * (W - 40 - BLOCK_SIZE);
-          blocks.push(new Block(x, 20, i, synthSettings));
-        };
-        toolbar.appendChild(btn);
-      });
-
-      clearBtn.addEventListener("click", () => {
-        blocks.length = 0; // clear all blocks
-      });
-
-      let dragTarget = null;
-      let dragOffset = { x: 0, y: 0 };
-
-      canvas.addEventListener("mousedown", (e) => {
-        const mx = e.offsetX;
-        const my = e.offsetY;
-        for (let b of [...blocks].reverse()) {
-          if (mx >= b.x && mx <= b.x + BLOCK_SIZE && my >= b.y && my <= b.y + BLOCK_SIZE) {
-            dragTarget = b;
-            b.isDragging = true;
-            dragOffset = { x: mx - b.x, y: my - b.y };
-            b.vx = b.vy = 0;
-            playTone(notes[b.noteIdx].freq, b.waveform, b.attack, b.release);
-            b.glow = 1;
-            break;
-          }
-        }
-      });
-
-      canvas.addEventListener("mousemove", (e) => {
-        if (dragTarget) {
-          dragTarget.x = e.offsetX - dragOffset.x;
-          dragTarget.y = e.offsetY - dragOffset.y;
-        }
-      });
-
-      canvas.addEventListener("mouseup", () => {
-        if (dragTarget) {
-          dragTarget.isDragging = false;
-          dragTarget = null;
-        }
-      });
-
-      function animate() {
-        ctx.clearRect(0, 0, W, H);
-
-        for (let b of blocks) {
-          b.update(blocks, H, W);
-          b.draw(ctx);
-          if (!b.playLock && b.intersectsPlayhead(playheadX)) {
-            playTone(notes[b.noteIdx].freq, b.waveform, b.attack, b.release);
-            b.playLock = true;
-            b.glow = 1;
-            setTimeout(() => b.playLock = false, NOTE_DURATION_MS);
-          }
-        }
-
-        ctx.strokeStyle = "#fff";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(playheadX, 0);
-        ctx.lineTo(playheadX, H);
-        ctx.stroke();
-
-        playheadX += playSpeed;
-        if (playheadX > W) playheadX = 0;
-
-        requestAnimationFrame(animate);
-      }
-
-      animate();
-    }
-
-    setupTrack("canvas1", "toolbar1", "speed1", "waveform1", "attack1", "release1", "clear1");
-    setupTrack("canvas2", "toolbar2", "speed2", "waveform2", "attack2", "release2", "clear2");
-  </script>
+  <h1>Sequencer Projects</h1>
+  <p>Select a project to explore:</p>
+  <ul>
+    <li><a href="sequencer.html">Block Sequencer</a></li>
+    <li><a href="wavetable.html">Drawing Sound</a></li>
+  </ul>
 </body>
 </html>
