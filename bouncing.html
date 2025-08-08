@@ -1,141 +1,281 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Rotating Box Music</title>
+<meta charset="UTF-8" />
+<title>Drag and Shake the Box — Bounce Balls with Sound</title>
 <style>
   body {
     background: #111;
-    color: white;
+    color: #eee;
+    font-family: Arial, sans-serif;
     text-align: center;
-    font-family: sans-serif;
-    margin: 0;
+    margin: 0; padding: 0;
+    user-select: none;
+    -webkit-user-select: none;
   }
   canvas {
-    display: block;
-    margin: 0 auto;
     background: #000;
     border: 2px solid #3399ff;
+    display: block;
+    margin: 20px auto;
+    cursor: grab;
+  }
+  canvas:active {
+    cursor: grabbing;
+  }
+  h1 {
+    margin-top: 10px;
+    color: #3399ff;
+  }
+  p {
+    margin-top: 0;
+    color: #66aaff;
   }
 </style>
 </head>
 <body>
-<h1>Rotating Box with Musical Balls</h1>
-<p>Use ⬅️ and ➡️ to rotate the box</p>
-<canvas id="gameCanvas" width="600" height="600"></canvas>
+<h1>Drag & Shake the Box — Balls Bounce & Play Notes!</h1>
+<p>Click and drag the box around. Fling it to shake balls inside.</p>
+<canvas id="canvas" width="600" height="600"></canvas>
+
 <script>
-const canvas = document.getElementById("gameCanvas");
-const ctx = canvas.getContext("2d");
-const W = canvas.width;
-const H = canvas.height;
+(() => {
+  const canvas = document.getElementById("canvas");
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width;
+  const H = canvas.height;
 
-let audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  // Audio setup
+  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
-// Ball data
-const balls = [
-  {x: 0, y: 0, vx: 120, vy: 80, r: 12, color: "red",    freq: 261.63}, // C4
-  {x: 0, y: 0, vx: -100, vy: 90, r: 12, color: "green", freq: 329.63}, // E4
-  {x: 0, y: 0, vx: 140, vy: -100, r: 12, color: "blue", freq: 392.00}, // G4
-  {x: 0, y: 0, vx: -80, vy: -120, r: 12, color: "yellow", freq: 523.25} // C5
-];
+  function playNote(freq) {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.12);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.12);
+  }
 
-// Center the balls
-balls.forEach(b => {
-  b.x = 0;
-  b.y = 0;
-});
-
-let boxSize = 400;
-let angle = 0;
-let lastTime = performance.now();
-
-// Play short sine note
-function playNote(freq) {
-  const osc = audioCtx.createOscillator();
-  const gain = audioCtx.createGain();
-  osc.type = "sine";
-  osc.frequency.value = freq;
-  gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
-  gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.15);
-  osc.connect(gain).connect(audioCtx.destination);
-  osc.start();
-  osc.stop(audioCtx.currentTime + 0.15);
-}
-
-// Rotate vector by angle
-function rotate(x, y, a) {
-  return {
-    x: x * Math.cos(a) - y * Math.sin(a),
-    y: x * Math.sin(a) + y * Math.cos(a)
-  };
-}
-
-// Main update loop
-function update(dt) {
+  // Box properties
+  const boxSize = 400;
   const half = boxSize / 2;
+  let boxX = W / 2;
+  let boxY = H / 2;
+  let boxVX = 0;
+  let boxVY = 0;
 
-  balls.forEach(b => {
-    b.x += b.vx * dt;
-    b.y += b.vy * dt;
+  // Balls inside box in box-local coords
+  const balls = [
+    { x: 50, y: 50, vx: 150, vy: 100, r: 14, color: "red", freq: 261.63 },   // C4
+    { x: -50, y: 60, vx: -130, vy: 90, r: 14, color: "green", freq: 329.63 }, // E4
+    { x: 40, y: -40, vx: 140, vy: -110, r: 14, color: "blue", freq: 392.00 }, // G4
+    { x: -60, y: -50, vx: -90, vy: -140, r: 14, color: "yellow", freq: 523.25 } // C5
+  ];
 
-    // Check collisions in rotated frame
-    const posRot = rotate(b.x, b.y, -angle);
-    let collided = false;
-    if (posRot.x + b.r > half) { posRot.x = half - b.r; b.vx = -b.vx; collided = true; }
-    if (posRot.x - b.r < -half) { posRot.x = -half + b.r; b.vx = -b.vx; collided = true; }
-    if (posRot.y + b.r > half) { posRot.y = half - b.r; b.vy = -b.vy; collided = true; }
-    if (posRot.y - b.r < -half) { posRot.y = -half + b.r; b.vy = -b.vy; collided = true; }
+  // Dragging state
+  let isDragging = false;
+  let dragStartX = 0;
+  let dragStartY = 0;
+  let lastDragX = 0;
+  let lastDragY = 0;
+  let lastTime = 0;
 
-    if (collided) {
-      // Rotate corrected position back
-      const corrected = rotate(posRot.x, posRot.y, angle);
-      b.x = corrected.x;
-      b.y = corrected.y;
-      playNote(b.freq);
+  // Velocity smoothing for fling
+  let recentMoves = [];
+
+  function clearRecentMoves() {
+    recentMoves = [];
+  }
+
+  // Convert ball box coords to canvas coords for drawing
+  function ballCanvasPos(ball) {
+    return {
+      x: boxX + ball.x,
+      y: boxY + ball.y
+    };
+  }
+
+  // Check if point is inside box
+  function isInBox(x, y) {
+    return x >= boxX - half && x <= boxX + half && y >= boxY - half && y <= boxY + half;
+  }
+
+  // Mouse handlers
+  canvas.addEventListener("mousedown", e => {
+    const mx = e.offsetX;
+    const my = e.offsetY;
+    if (isInBox(mx, my)) {
+      isDragging = true;
+      dragStartX = mx;
+      dragStartY = my;
+      lastDragX = mx;
+      lastDragY = my;
+      lastTime = performance.now();
+      clearRecentMoves();
     }
   });
-}
 
-// Draw box and balls
-function draw() {
-  ctx.clearRect(0, 0, W, H);
-  ctx.save();
-  ctx.translate(W/2, H/2);
-  ctx.rotate(angle);
-
-  // Draw box
-  ctx.strokeStyle = "#3399ff";
-  ctx.lineWidth = 4;
-  ctx.strokeRect(-boxSize/2, -boxSize/2, boxSize, boxSize);
-
-  ctx.restore();
-
-  // Draw balls
-  balls.forEach(b => {
-    const screenPos = rotate(b.x, b.y, angle);
-    ctx.beginPath();
-    ctx.arc(W/2 + screenPos.x, H/2 + screenPos.y, b.r, 0, Math.PI * 2);
-    ctx.fillStyle = b.color;
-    ctx.fill();
+  window.addEventListener("mouseup", e => {
+    if (isDragging) {
+      isDragging = false;
+      // Calculate velocity from recent moves for fling effect
+      if (recentMoves.length >= 2) {
+        const first = recentMoves[0];
+        const last = recentMoves[recentMoves.length - 1];
+        const dt = (last.time - first.time) / 1000;
+        if (dt > 0) {
+          boxVX = (last.x - first.x) / dt;
+          boxVY = (last.y - first.y) / dt;
+        }
+      }
+      clearRecentMoves();
+    }
   });
-}
 
-// Game loop
-function loop(time) {
-  const dt = (time - lastTime) / 1000;
-  lastTime = time;
-  update(dt);
-  draw();
-  requestAnimationFrame(loop);
-}
+  window.addEventListener("mousemove", e => {
+    if (isDragging) {
+      const mx = e.offsetX;
+      const my = e.offsetY;
+      const now = performance.now();
+      // Move box by delta mouse
+      const dx = mx - lastDragX;
+      const dy = my - lastDragY;
+      boxX += dx;
+      boxY += dy;
+      // Clamp box inside canvas so you can't drag it offscreen
+      boxX = Math.min(Math.max(boxX, half), W - half);
+      boxY = Math.min(Math.max(boxY, half), H - half);
 
-// Controls
-window.addEventListener("keydown", e => {
-  if (e.key === "ArrowLeft") angle -= 0.05;
-  if (e.key === "ArrowRight") angle += 0.05;
-});
+      // Track recent moves for velocity
+      recentMoves.push({ x: mx, y: my, time: now });
+      if (recentMoves.length > 10) recentMoves.shift();
 
-loop(lastTime);
+      lastDragX = mx;
+      lastDragY = my;
+      lastTime = now;
+    }
+  });
+
+  // Physics update
+  function update(dt) {
+    if (!isDragging) {
+      // Apply box velocity with friction
+      boxX += boxVX * dt;
+      boxY += boxVY * dt;
+      boxVX *= 0.95;
+      boxVY *= 0.95;
+
+      // Clamp box inside canvas
+      if (boxX < half) {
+        boxX = half;
+        boxVX = -boxVX * 0.7;
+      }
+      if (boxX > W - half) {
+        boxX = W - half;
+        boxVX = -boxVX * 0.7;
+      }
+      if (boxY < half) {
+        boxY = half;
+        boxVY = -boxVY * 0.7;
+      }
+      if (boxY > H - half) {
+        boxY = H - half;
+        boxVY = -boxVY * 0.7;
+      }
+    }
+
+    // Balls update relative to box motion:
+    balls.forEach(ball => {
+      // Ball velocity is affected by box velocity — simulate inertial forces by subtracting boxVX/VY:
+      // This way the balls appear to be inside the box moving at box velocity
+      // So relative ball velocity is vx - boxVX, vy - boxVY (we want to keep the ball inside the box space)
+      // Actually we simulate in box-local coords, so to simulate inertia: accelerate balls opposite to box velocity changes
+
+      // Calculate ball's relative velocity
+      // Add a simple inertial effect based on box velocity
+      ball.vx -= boxVX * dt * 5; // multiply to make shake stronger
+      ball.vy -= boxVY * dt * 5;
+
+      // Update ball position relative to box
+      ball.x += ball.vx * dt;
+      ball.y += ball.vy * dt;
+
+      // Collisions with box walls
+      let collided = false;
+
+      if (ball.x + ball.r > half) {
+        ball.x = half - ball.r;
+        ball.vx = -ball.vx * 0.85;
+        collided = true;
+      }
+      if (ball.x - ball.r < -half) {
+        ball.x = -half + ball.r;
+        ball.vx = -ball.vx * 0.85;
+        collided = true;
+      }
+      if (ball.y + ball.r > half) {
+        ball.y = half - ball.r;
+        ball.vy = -ball.vy * 0.85;
+        collided = true;
+      }
+      if (ball.y - ball.r < -half) {
+        ball.y = -half + ball.r;
+        ball.vy = -ball.vy * 0.85;
+        collided = true;
+      }
+
+      // Apply friction to ball velocity
+      ball.vx *= 0.995;
+      ball.vy *= 0.995;
+
+      if (collided) {
+        playNote(ball.freq);
+      }
+    });
+  }
+
+  // Drawing
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+
+    // Draw box
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = "#3399ff";
+    ctx.fillStyle = "rgba(0,0,0,0.6)";
+    ctx.fillRect(boxX - half, boxY - half, boxSize, boxSize);
+    ctx.strokeRect(boxX - half, boxY - half, boxSize, boxSize);
+
+    // Draw balls
+    balls.forEach(ball => {
+      const pos = ballCanvasPos(ball);
+      ctx.beginPath();
+      ctx.fillStyle = ball.color;
+      ctx.shadowColor = ball.color;
+      ctx.shadowBlur = 12;
+      ctx.arc(pos.x, pos.y, ball.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    });
+  }
+
+  let lastTimestamp = 0;
+  function animate(timestamp = 0) {
+    if (!lastTimestamp) lastTimestamp = timestamp;
+    const dt = (timestamp - lastTimestamp) / 1000;
+    lastTimestamp = timestamp;
+
+    update(dt);
+    draw();
+
+    requestAnimationFrame(animate);
+  }
+
+  animate();
+})();
 </script>
 </body>
 </html>
